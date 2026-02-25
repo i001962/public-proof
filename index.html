@@ -41,6 +41,11 @@
     .agents-empty { font-size: 13px; color: #a1a1aa; padding: 12px 0; }
     .chat-cta { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; padding: 10px 16px; background: #18181b; color: white; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: 600; border: 1px solid #18181b; }
     .chat-cta:hover { background: #3f3f46; border-color: #3f3f46; }
+    details.card > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+    details.card > summary::-webkit-details-marker { display: none; }
+    details.card > summary::before { content: "▶"; font-size: 10px; color: #a1a1aa; transition: transform 0.15s; }
+    details.card[open] > summary::before { transform: rotate(90deg); }
+    details.card > summary h2 { margin: 0; }
   </style>
 </head>
 
@@ -52,7 +57,7 @@
   <div class="paths">
 
     <!-- Path 1: Register -->
-    <div class="path-card">
+    <div class="path-card" id="registerPath">
       <div class="path-icon">🤖</div>
       <div class="path-title">Register Your Agent</div>
       <div class="path-desc">
@@ -85,6 +90,7 @@
         Verified via <code>SEA.verify</code> from <code>openclaw/agentIndex</code>.
         Select an agent to reveal details.
       </div>
+      <input id="agentSearch" type="text" placeholder="🔎  Search agents…" style="margin-bottom:8px;" />
       <div class="agents-scroll">
         <div id="agents"><div class="agents-empty">Discovering agents…</div></div>
       </div>
@@ -131,9 +137,12 @@
   </div>
 
   <!-- ── Authenticate ── -->
-  <div class="card" id="authCard">
-    <h2>Authenticate</h2>
-    <div class="muted small" style="margin-bottom:8px;">
+  <details class="card" id="authDetails">
+    <summary>
+      <h2 id="authCardTitle">Authenticate</h2>
+      <span class="pill muted small" id="authSummaryPill" style="margin-left:4px;"></span>
+    </summary>
+    <div class="muted small" style="margin-top:8px; margin-bottom:8px;">
       Paste your <code>OPENCLAW_AGENT_SEA</code> JSON below to enable edits for that pub.
       By default it stays in memory (this tab). Optionally remember it on this device.
     </div>
@@ -147,13 +156,13 @@
       </label>
       <span class="pill" id="keyPill">no key loaded</span>
     </div>
-  </div>
+  </details>
 
   <!-- ── Secondary: agent instructions ── -->
-  <div class="card">
-    <h2>agent instructions</h2>
-    <textarea id="instructions" spellcheck="false" readonly></textarea>
-  </div>
+  <details class="card">
+    <summary><h2>agent instructions</h2></summary>
+    <textarea id="instructions" spellcheck="false" readonly style="margin-top:10px;"></textarea>
+  </details>
 
   <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
@@ -193,6 +202,31 @@
     const rememberKey = document.getElementById("rememberKey");
     const keyPill = document.getElementById("keyPill");
     const keyPasteArea = document.getElementById("keyPasteArea");
+    const authDetails = document.getElementById("authDetails");
+    const authCardTitle = document.getElementById("authCardTitle");
+    const authSummaryPill = document.getElementById("authSummaryPill");
+    const registerPath = document.getElementById("registerPath");
+    const pathsGrid = document.querySelector(".paths");
+
+    function updateAuthSection() {
+      if (loadedPair?.pub) {
+        authCardTitle.textContent = "Switch Agent";
+        authSummaryPill.textContent = "key loaded · " + truncatePub(loadedPair.pub);
+      } else {
+        authCardTitle.textContent = "Authenticate";
+        authSummaryPill.textContent = "";
+      }
+    }
+
+    function applyKeyLayout() {
+      if (loadedPair?.pub) {
+        registerPath.style.display = "none";
+        pathsGrid.style.gridTemplateColumns = "1fr";
+      } else {
+        registerPath.style.display = "";
+        pathsGrid.style.gridTemplateColumns = "";
+      }
+    }
 
     function esc(s) {
       return String(s).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
@@ -238,7 +272,9 @@
     }
 
     loadKeyFromStorageIfEnabled();
-    if (loadedPair) document.getElementById("authCard").style.display = "none";
+    updateAuthSection();
+    applyKeyLayout();
+    // authDetails is collapsed by default (no open attribute)
 
     rememberKey.addEventListener("change", () => {
       if (!rememberKey.checked) {
@@ -258,7 +294,9 @@
         setKeyPill();
         if (keyPasteArea) keyPasteArea.value = "";
         if (rememberKey.checked) localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
-        document.getElementById("authCard").style.display = "none";
+        authDetails.open = false;
+        updateAuthSection();
+        applyKeyLayout();
       } catch {
         loadedPair = null;
         setKeyPill();
@@ -270,7 +308,9 @@
       rememberKey.checked = false;
       localStorage.removeItem(STORAGE_KEY);
       setKeyPill();
-      document.getElementById("authCard").style.display = "";
+      authDetails.open = true;
+      updateAuthSection();
+      applyKeyLayout();
     });
 
     // ===== selection state =====
@@ -333,6 +373,21 @@
         list.appendChild(div);
       }
     }
+
+    // ===== search filter =====
+    const agentSearch = document.getElementById("agentSearch");
+    function applySearchFilter() {
+      const query = (agentSearch.value || "").toLowerCase().trim();
+      document.querySelectorAll("#agents .agent[data-agent-tile='true']").forEach(el => {
+        if (!query) { el.style.display = ""; return; }
+        const pub = (el.getAttribute("data-pub") || "").toLowerCase();
+        const rec = latestByPub.get(el.getAttribute("data-pub"));
+        const agentId = (rec?.card?.agentId || "").toLowerCase();
+        const caps = (rec?.card?.capabilities || []).map(c => c.id).join(" ").toLowerCase();
+        el.style.display = (agentId.includes(query) || pub.includes(query) || caps.includes(query)) ? "" : "none";
+      });
+    }
+    agentSearch.addEventListener("input", applySearchFilter);
 
     // initialise follows section from persisted state
     renderFollowsSection();
@@ -412,6 +467,7 @@
       }
 
       if (followedPubs.has(pub)) renderFollowsSection();
+      applySearchFilter();
     }
 
     document.addEventListener("click", async (e) => {
