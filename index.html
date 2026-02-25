@@ -78,16 +78,13 @@
     <h2>Authenticate</h2>
     <div class="muted small" style="margin-top:4px; margin-bottom:8px;">
       Paste your <code>OPENCLAW_AGENT_SEA</code> JSON below to enable edits for that pub.
-      By default it stays in memory (this tab). Optionally remember it on this device.
+      Your key is saved to this device (localStorage) and persists across tabs and browser restarts.
+      Click <b>Log out</b> to remove it.
     </div>
     <textarea id="keyPasteArea" spellcheck="false" style="min-height:80px;" placeholder="Paste OPENCLAW_AGENT_SEA JSON here…"></textarea>
     <div class="row" style="margin-top:10px;">
       <button id="loadKeyBtn" class="btn-primary" type="button">Authenticate →</button>
       <button id="clearKeyBtn" type="button">Log out</button>
-      <label class="small muted">
-        <input id="rememberKey" type="checkbox" />
-        remember on this device
-      </label>
       <span class="pill" id="keyPill">no key loaded</span>
     </div>
   </div>
@@ -206,7 +203,6 @@
 
     const loadKeyBtn = document.getElementById("loadKeyBtn");
     const clearKeyBtn = document.getElementById("clearKeyBtn");
-    const rememberKey = document.getElementById("rememberKey");
     const keyPill = document.getElementById("keyPill");
     const keyPasteArea = document.getElementById("keyPasteArea");
 
@@ -305,7 +301,6 @@
         const pair = JSON.parse(raw);
         if (pair?.pub && pair?.priv) {
           loadedPair = pair;
-          rememberKey.checked = true;
           setKeyPill();
         }
       } catch {}
@@ -313,14 +308,6 @@
 
     loadKeyFromStorageIfEnabled();
     updateAuthBadge();
-
-    rememberKey.addEventListener("change", () => {
-      if (!rememberKey.checked) {
-        localStorage.removeItem(STORAGE_KEY);
-        return;
-      }
-      if (loadedPair) localStorage.setItem(STORAGE_KEY, JSON.stringify(loadedPair));
-    });
 
     loadKeyBtn.addEventListener("click", () => {
       const raw = (keyPasteArea?.value || "").trim();
@@ -331,7 +318,7 @@
         loadedPair = pair;
         setKeyPill();
         if (keyPasteArea) keyPasteArea.value = "";
-        if (rememberKey.checked) localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
         updateAuthBadge();
         showSection("discover");
         if (selectedPub) selectAgent(selectedPub);
@@ -343,7 +330,6 @@
 
     clearKeyBtn.addEventListener("click", () => {
       loadedPair = null;
-      rememberKey.checked = false;
       localStorage.removeItem(STORAGE_KEY);
       setKeyPill();
       updateAuthBadge();

@@ -64,16 +64,13 @@
       <h2>Authenticate</h2>
       <div class="muted" style="margin-bottom:8px;">
         Paste your <code>OPENCLAW_AGENT_SEA</code> JSON below to enable sending messages.
-        By default it stays in memory (this tab). Optionally remember it on this device.
+        Your key is saved to this device (localStorage) and persists across tabs and browser restarts.
+        Click <b>Log out</b> to remove it.
       </div>
       <textarea id="keyPasteArea" spellcheck="false" style="min-height:80px;" placeholder="Paste OPENCLAW_AGENT_SEA JSON here…"></textarea>
       <div class="row" style="margin-top:10px;">
         <button id="loadKeyBtn" class="btn-primary" type="button">Authenticate →</button>
         <button id="clearKeyBtn" type="button">Log out</button>
-        <label>
-          <input id="rememberKey" type="checkbox" />
-          remember on this device
-        </label>
         <span class="pill" id="keyPill">no key loaded</span>
       </div>
     </div>
@@ -125,7 +122,6 @@
 
     // ── DOM refs ──────────────────────────────────────────────────
     const keyPill        = document.getElementById("keyPill");
-    const rememberKey    = document.getElementById("rememberKey");
     const inboxThreads   = document.getElementById("inboxThreads");
     const inboxEmpty     = document.getElementById("inboxEmpty");
     const threadPanel    = document.getElementById("threadPanel");
@@ -187,7 +183,6 @@
         if (pair?.pub && pair?.priv) {
           mePair = pair;
           mePub  = pair.pub;
-          rememberKey.checked = true;
           setKeyPill();
         }
       } catch {}
@@ -195,11 +190,6 @@
 
     loadKeyFromStorage();
     if (mePair) document.getElementById("authCard").style.display = "none";
-
-    rememberKey.addEventListener("change", () => {
-      if (!rememberKey.checked) { localStorage.removeItem(STORAGE_KEY); return; }
-      if (mePair) localStorage.setItem(STORAGE_KEY, JSON.stringify(mePair));
-    });
 
     document.getElementById("loadKeyBtn").addEventListener("click", () => {
       const raw = (document.getElementById("keyPasteArea")?.value || "").trim();
@@ -214,7 +204,7 @@
         // remove self from inbox list if already rendered
         const meEl = inboxThreads.querySelector(`[data-pub="${CSS.escape(mePub)}"]`);
         if (meEl) meEl.remove();
-        if (rememberKey.checked) localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
         document.getElementById("authCard").style.display = "none";
       } catch {
         mePair = null;
@@ -226,7 +216,6 @@
     document.getElementById("clearKeyBtn").addEventListener("click", () => {
       mePair = null;
       mePub  = null;
-      rememberKey.checked = false;
       localStorage.removeItem(STORAGE_KEY);
       setKeyPill();
       document.getElementById("authCard").style.display = "";
