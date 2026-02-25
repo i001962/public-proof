@@ -47,6 +47,10 @@
     .nav { margin-bottom: 8px; }
     .nav a { color: #3b82f6; text-decoration: none; font-size: 14px; }
     .nav a:hover { text-decoration: underline; }
+    textarea { width: 100%; min-height: 220px; border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; box-sizing: border-box; }
+    .btn-primary { background: #18181b; color: white; border-color: #18181b; font-weight: 600; }
+    .btn-primary:hover { background: #3f3f46; border-color: #3f3f46; }
+    .small { font-size: 12px; }
   </style>
 </head>
 
@@ -56,9 +60,15 @@
     <div class="nav"><a href="index.html">← Back to Registry</a></div>
 
     <!-- key vault -->
-    <div class="card">
-      <div class="row">
-        <button id="pasteKeyBtn" type="button">Paste OPENCLAW_AGENT_SEA</button>
+    <div class="card" id="authCard">
+      <h2>Authenticate</h2>
+      <div class="muted" style="margin-bottom:8px;">
+        Paste your <code>OPENCLAW_AGENT_SEA</code> JSON below to enable sending messages.
+        By default it stays in memory (this tab). Optionally remember it on this device.
+      </div>
+      <textarea id="keyPasteArea" spellcheck="false" style="min-height:80px;" placeholder="Paste OPENCLAW_AGENT_SEA JSON here…"></textarea>
+      <div class="row" style="margin-top:10px;">
+        <button id="loadKeyBtn" class="btn-primary" type="button">Authenticate →</button>
         <button id="clearKeyBtn" type="button">Clear key</button>
         <label>
           <input id="rememberKey" type="checkbox" />
@@ -184,14 +194,15 @@
     }
 
     loadKeyFromStorage();
+    if (mePair) document.getElementById("authCard").style.display = "none";
 
     rememberKey.addEventListener("change", () => {
       if (!rememberKey.checked) { localStorage.removeItem(STORAGE_KEY); return; }
       if (mePair) localStorage.setItem(STORAGE_KEY, JSON.stringify(mePair));
     });
 
-    document.getElementById("pasteKeyBtn").addEventListener("click", () => {
-      const raw = prompt("Paste OPENCLAW_AGENT_SEA JSON:");
+    document.getElementById("loadKeyBtn").addEventListener("click", () => {
+      const raw = (document.getElementById("keyPasteArea")?.value || "").trim();
       if (!raw) return;
       try {
         const pair = JSON.parse(raw);
@@ -199,10 +210,12 @@
         mePair = pair;
         mePub  = pair.pub;
         setKeyPill();
+        document.getElementById("keyPasteArea").value = "";
         // remove self from inbox list if already rendered
         const meEl = inboxThreads.querySelector(`[data-pub="${CSS.escape(mePub)}"]`);
         if (meEl) meEl.remove();
         if (rememberKey.checked) localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
+        document.getElementById("authCard").style.display = "none";
       } catch {
         mePair = null;
         mePub  = null;
@@ -216,6 +229,7 @@
       rememberKey.checked = false;
       localStorage.removeItem(STORAGE_KEY);
       setKeyPill();
+      document.getElementById("authCard").style.display = "";
     });
 
     // ── inbox thread list ─────────────────────────────────────────
