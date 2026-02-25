@@ -163,6 +163,10 @@
     }
     function pretty(obj) { return JSON.stringify(obj, null, 2); }
     function liveness(hb) { return (!hb) ? "stale" : ((Date.now() - hb < STALE_THRESHOLD_MS) ? "alive" : "stale"); }
+    function truncatePub(pub) {
+      if (!pub || pub.length <= 16) return pub;
+      return pub.slice(0, 8) + "…" + pub.slice(-6); // first8…last6
+    }
     function setSaveStatus(msg) { saveStatus.textContent = msg || ""; }
 
     async function verifyCard(signed, pub) {
@@ -178,7 +182,7 @@
         keyPill.textContent = "no key loaded";
         return;
       }
-      keyPill.textContent = "key loaded for pub " + loadedPair.pub;
+      keyPill.textContent = "key loaded · " + truncatePub(loadedPair.pub);
     }
 
     function loadKeyFromStorageIfEnabled() {
@@ -237,7 +241,7 @@
 
       detailsCard.style.display = "block";
       detailsMeta.innerHTML =
-        "pub: <code>" + esc(pub) + "</code> · status: <span class=\"pill\">" + esc(liveness(rec.hb)) + "</span> · updatedAt: " + (rec.card.updatedAt ? new Date(rec.card.updatedAt).toLocaleString() : "?");
+        "pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code> · status: <span class=\"pill\">" + esc(liveness(rec.hb)) + "</span> · updatedAt: " + (rec.card.updatedAt ? new Date(rec.card.updatedAt).toLocaleString() : "?");
 
       cardEditor.value = pretty(rec.card);
       setSaveStatus("");
@@ -297,13 +301,15 @@
       const caps = Array.isArray(card.capabilities) ? card.capabilities : [];
       const live = liveness(rec.hb);
 
-      const inner = "<div class=\"row\" style=\"justify-content: space-between;\">" +
-        "<div><b>" + esc(card.agentId || "unknown") + "</b> <span class=\"pill\">" + esc(live) + "</span></div>" +
-        "<button type=\"button\" class=\"copyPubInlineBtn\" data-pub=\"" + esc(pub) + "\">Copy pub</button>" +
+      const inner = "<div class=\"row\" style=\"justify-content: space-between; align-items: flex-start;\">" +
+        "<div>" +
+        "<div><b>" + esc(card.agentId || "unknown") + "</b> <span class=\"pill\">" + esc(live) + "</span>" + (card.version ? " <span class=\"muted small\">v" + esc(card.version) + "</span>" : "") + "</div>" +
+        "<div class=\"small muted\" style=\"margin-top:3px;\">pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code></div>" +
         "</div>" +
-        "<div class=\"small\">pub: <code>" + esc(pub) + "</code></div>" +
-        (endpoints.http ? "<div class=\"small\">http: <code>" + esc(endpoints.http) + "</code></div>" : "") +
-        (endpoints.mcp ? "<div class=\"small\">mcp: <code>" + esc(endpoints.mcp) + "</code></div>" : "") +
+        "<button type=\"button\" class=\"copyPubInlineBtn\" data-pub=\"" + esc(pub) + "\" title=\"Copy full pub key\">Copy pub</button>" +
+        "</div>" +
+        (endpoints.http ? "<div class=\"small\" style=\"margin-top:4px;\">http: <code>" + esc(endpoints.http) + "</code></div>" : "") +
+        (endpoints.mcp ? "<div class=\"small\" style=\"margin-top:2px;\">mcp: <code>" + esc(endpoints.mcp) + "</code></div>" : "") +
         "<div class=\"small\" style=\"margin-top:6px;\">caps: " +
         (caps.map(c => "<code>" + esc(c.id) + "</code>").join(" ") || "<span class='muted'>none</span>") +
         "</div>";
@@ -322,7 +328,7 @@
 
       if (selectedPub === pub) {
         detailsMeta.innerHTML =
-          "pub: <code>" + esc(pub) + "</code> · status: <span class=\"pill\">" + esc(liveness(rec.hb)) + "</span> · updatedAt: " + (rec.card.updatedAt ? new Date(rec.card.updatedAt).toLocaleString() : "?");
+          "pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code> · status: <span class=\"pill\">" + esc(liveness(rec.hb)) + "</span> · updatedAt: " + (rec.card.updatedAt ? new Date(rec.card.updatedAt).toLocaleString() : "?");
       }
     }
 
