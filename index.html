@@ -439,18 +439,15 @@
       return { ok: true };
     }
 
-    async function authWithLoadedKey() {
-      const user = gun.user();
-      const authAck = await new Promise(res => user.auth(loadedPair, ack => res(ack)));
-      if (authAck?.err) throw new Error("auth failed");
-      return user;
-    }
-
     async function saveCardJson(cardObj) {
-      const user = await authWithLoadedKey();
       const signed = await Gun.SEA.sign(cardObj, loadedPair);
-      const putAck = await new Promise(res => user.get("openclaw").get("card").put(signed, ack => res(ack)));
-      if (putAck?.err) throw new Error("put failed");
+      const putAck = await new Promise((resolve, reject) => {
+        gun.user().auth(loadedPair, (authAck) => {
+          if (authAck && authAck.err) { reject(new Error("auth: " + authAck.err)); return; }
+          gun.user().get("openclaw").get("card").put(signed, resolve);
+        });
+      });
+      if (putAck && putAck.err) throw new Error("put: " + putAck.err);
       return signed;
     }
 
