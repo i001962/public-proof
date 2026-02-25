@@ -701,11 +701,9 @@
       keysOut.style.display = "none";
       keysOut.textContent = "";
 
-      const agentId = getVal("agentId", "");
-      if (!agentId) { regStatus.textContent = "agentId is required."; return; }
-
       const name = getVal("agentName", "My Agent");
       const agentId = getVal("agentId", "") || name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+      if (!agentId) { regStatus.textContent = "agentId is required."; return; }
       const description = getVal("agentDesc", "");
       const url = getVal("agentUrl", "");
       const version = getVal("version", "1.0.0");
