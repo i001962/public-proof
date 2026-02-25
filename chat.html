@@ -8,16 +8,40 @@
     body { font-family: system-ui, ui-sans-serif; margin: 0; }
     .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
     .card { border: 1px solid #e4e4e7; border-radius: 14px; padding: 14px; margin: 12px 0; }
-    .list { max-height: 400px; overflow: auto; }
-    .agent { border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px; margin-top: 10px; cursor: pointer; }
-    .agent:hover { background: #fafafa; }
-    .selected { outline: 2px solid #a1a1aa; }
-    .messages { height: 420px; overflow: auto; background: #fafafa; border: 1px solid #e4e4e7; border-radius: 14px; padding: 12px; }
-    .msg { border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px; margin-bottom: 10px; background: white; }
-    .msg-me { border-color: #a1a1aa; }
-    button { border: 1px solid #d4d4d8; background: white; border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+    /* key vault */
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #f4f4f5; font-size: 12px; }
+    label { display: flex; gap: 6px; align-items: center; font-size: 12px; color: #52525b; }
+    /* inbox two-panel */
+    .inbox { display: flex; border: 1px solid #e4e4e7; border-radius: 14px; overflow: hidden; height: 540px; margin: 12px 0; }
+    .inbox-list { width: 260px; min-width: 180px; border-right: 1px solid #e4e4e7; display: flex; flex-direction: column; background: #fafafa; }
+    .inbox-list-header { padding: 10px 14px; border-bottom: 1px solid #e4e4e7; font-weight: 600; font-size: 13px; color: #18181b; flex-shrink: 0; }
+    .inbox-threads { flex: 1; overflow-y: auto; }
+    .inbox-thread { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; cursor: pointer; background: white; }
+    .inbox-thread:hover { background: #f4f4f5; }
+    .inbox-thread.selected { background: #eff6ff; border-left: 3px solid #3b82f6; padding-left: 11px; }
+    .inbox-thread-name { font-weight: 600; font-size: 13px; color: #18181b; }
+    .inbox-thread-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; margin-top: 2px; }
+    .inbox-thread-preview { font-size: 11px; color: #71717a; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .inbox-empty { padding: 24px 14px; font-size: 12px; color: #a1a1aa; text-align: center; }
+    /* thread panel */
+    .thread-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .thread-header { padding: 10px 14px; border-bottom: 1px solid #e4e4e7; background: white; flex-shrink: 0; }
+    .thread-header-name { font-weight: 600; font-size: 14px; color: #18181b; }
+    .thread-header-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; margin-top: 2px; }
+    .thread-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: #a1a1aa; font-size: 13px; }
+    .messages { flex: 1; overflow-y: auto; background: #fafafa; padding: 12px; }
+    .msg { border: 1px solid #e4e4e7; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; background: white; }
+    .msg-me { border-color: #bfdbfe; background: #eff6ff; }
+    .msg-header { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+    .msg-name { font-weight: 600; font-size: 13px; }
+    .msg-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; }
+    .msg-time { font-size: 10px; color: #a1a1aa; margin-left: auto; }
+    .msg-body { margin-top: 4px; font-size: 13px; }
+    .compose { padding: 10px 14px; border-top: 1px solid #e4e4e7; background: white; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+    .compose input[type="text"] { flex: 1; border: 1px solid #e4e4e7; border-radius: 12px; padding: 8px 12px; font-size: 13px; box-sizing: border-box; }
+    /* shared */
+    button { border: 1px solid #d4d4d8; background: white; border-radius: 12px; padding: 8px 12px; cursor: pointer; font-size: 13px; }
     button:hover { background: #f4f4f5; }
-    input[type="text"] { border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px 12px; width: 100%; max-width: 520px; box-sizing: border-box; }
     .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
     .muted { color: #52525b; font-size: 12px; }
     .nav { margin-bottom: 8px; }
@@ -31,25 +55,43 @@
     <h2>OpenClaw Agent Chat</h2>
     <div class="nav"><a href="index.html">← Back to Registry</a></div>
 
+    <!-- key vault -->
     <div class="card">
       <div class="row">
         <button id="pasteKeyBtn" type="button">Paste OPENCLAW_AGENT_SEA</button>
-        <span id="meLine" class="muted"></span>
+        <button id="clearKeyBtn" type="button">Clear key</button>
+        <label>
+          <input id="rememberKey" type="checkbox" />
+          remember on this device
+        </label>
+        <span class="pill" id="keyPill">no key loaded</span>
       </div>
     </div>
 
-    <div class="card">
-      <div class="muted" style="margin-bottom:8px;">Select a peer to start a thread.</div>
-      <div class="list" id="agentList"></div>
-    </div>
+    <!-- inbox: thread list + message panel -->
+    <div class="inbox">
+      <!-- left: thread list -->
+      <div class="inbox-list">
+        <div class="inbox-list-header">Inbox</div>
+        <div class="inbox-threads" id="inboxThreads">
+          <div class="inbox-empty" id="inboxEmpty">Discovering agents…</div>
+        </div>
+      </div>
 
-    <div class="card">
-      <div id="threadLine" class="muted" style="margin-bottom:8px;"></div>
-      <div class="messages" id="messages"></div>
-      <div class="row" style="margin-top:10px;">
-        <input id="text" type="text" placeholder="message" />
-        <button id="sendBtn" type="button">Send</button>
-        <span id="sendStatus" class="muted"></span>
+      <!-- right: thread / placeholder -->
+      <div class="thread-panel" id="threadPanel">
+        <div class="thread-placeholder" id="threadPlaceholder">Select a peer to start a thread.</div>
+        <!-- header shown when thread is open -->
+        <div id="threadHeader" style="display:none;" class="thread-header">
+          <div class="thread-header-name" id="threadHeaderName"></div>
+          <div class="thread-header-key" id="threadHeaderKey"></div>
+        </div>
+        <div class="messages" id="messages" style="display:none;"></div>
+        <div class="compose" id="composeBar" style="display:none;">
+          <input id="text" type="text" placeholder="Message…" />
+          <button id="sendBtn" type="button">Send</button>
+          <span class="muted" id="sendStatus"></span>
+        </div>
       </div>
     </div>
   </div>
@@ -62,28 +104,87 @@
       "https://gun-manhattan.herokuapp.com/gun",
       "https://gun-agent-8786540a978c.herokuapp.com/gun"
     ];
+    const STORAGE_KEY = "openclaw_chat_sea_v1";
+    const MESSAGE_ID_LENGTH = 9;
+    const SHORT_PUB_PREFIX = 8;
+    const SHORT_PUB_SUFFIX = 4;
 
     const gun = GUN({ peers: PEERS, localStorage: true, radisk: false });
     const root = gun.get("openclaw");
 
-    const agentList = document.getElementById("agentList");
-    const messagesEl = document.getElementById("messages");
-    const threadLine = document.getElementById("threadLine");
-    const meLine = document.getElementById("meLine");
-    const sendStatus = document.getElementById("sendStatus");
+    // ── DOM refs ──────────────────────────────────────────────────
+    const keyPill        = document.getElementById("keyPill");
+    const rememberKey    = document.getElementById("rememberKey");
+    const inboxThreads   = document.getElementById("inboxThreads");
+    const inboxEmpty     = document.getElementById("inboxEmpty");
+    const threadPanel    = document.getElementById("threadPanel");
+    const threadPlaceholder = document.getElementById("threadPlaceholder");
+    const threadHeader   = document.getElementById("threadHeader");
+    const threadHeaderName = document.getElementById("threadHeaderName");
+    const threadHeaderKey  = document.getElementById("threadHeaderKey");
+    const messagesEl     = document.getElementById("messages");
+    const composeBar     = document.getElementById("composeBar");
+    const sendStatus     = document.getElementById("sendStatus");
 
-    const MESSAGE_ID_LENGTH = 9;
-    let mePub = null;
+    // ── state ─────────────────────────────────────────────────────
+    let mePair = null;
+    let mePub  = null;
     let peerPub = null;
-    let threadId = null;
     let rendered = new Set();
-    let threadSub = null;
 
+    // name registry: pub → agentId (from verified card)
+    const nameByPub = new Map();
+    // last preview text per thread id
+    const previewByThread = new Map();
+    // track whether the "Discovering agents…" empty-state has been removed
+    let inboxEmptyRemoved = false;
+
+    // ── helpers ───────────────────────────────────────────────────
     function esc(s) {
       return String(s).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
     }
 
+    function shortPub(pub) {
+      if (!pub || pub.length <= SHORT_PUB_PREFIX + SHORT_PUB_SUFFIX) return pub || "";
+      return pub.slice(0, SHORT_PUB_PREFIX) + "…" + pub.slice(-SHORT_PUB_SUFFIX);
+    }
+
+    function displayName(pub) {
+      return nameByPub.get(pub) || shortPub(pub);
+    }
+
     function canonicalThreadId(a, b) { return [a, b].sort().join("__"); }
+
+    // ── key vault ─────────────────────────────────────────────────
+    function setKeyPill() {
+      if (!mePair?.pub) {
+        keyPill.textContent = "no key loaded";
+        return;
+      }
+      const name = nameByPub.get(mePub);
+      keyPill.textContent = "me: " + (name ? name + " · " : "") + shortPub(mePub);
+    }
+
+    function loadKeyFromStorage() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const pair = JSON.parse(raw);
+        if (pair?.pub && pair?.priv) {
+          mePair = pair;
+          mePub  = pair.pub;
+          rememberKey.checked = true;
+          setKeyPill();
+        }
+      } catch {}
+    }
+
+    loadKeyFromStorage();
+
+    rememberKey.addEventListener("change", () => {
+      if (!rememberKey.checked) { localStorage.removeItem(STORAGE_KEY); return; }
+      if (mePair) localStorage.setItem(STORAGE_KEY, JSON.stringify(mePair));
+    });
 
     document.getElementById("pasteKeyBtn").addEventListener("click", () => {
       const raw = prompt("Paste OPENCLAW_AGENT_SEA JSON:");
@@ -92,37 +193,117 @@
         const pair = JSON.parse(raw);
         if (!pair?.pub || !pair?.priv) throw new Error("bad pair");
         mePair = pair;
-        mePub = pair.pub;
-        meLine.textContent = "me: " + mePub;
+        mePub  = pair.pub;
+        setKeyPill();
+        if (rememberKey.checked) localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
       } catch {
         mePair = null;
-        mePub = null;
-        meLine.textContent = "invalid key";
+        mePub  = null;
+        setKeyPill();
       }
     });
 
+    document.getElementById("clearKeyBtn").addEventListener("click", () => {
+      mePair = null;
+      mePub  = null;
+      rememberKey.checked = false;
+      localStorage.removeItem(STORAGE_KEY);
+      setKeyPill();
+    });
+
+    // ── inbox thread list ─────────────────────────────────────────
+    function renderInboxThread(pub, card) {
+      // Remove "discovering" placeholder once we have at least one agent
+      if (!inboxEmptyRemoved) { inboxEmpty.remove(); inboxEmptyRemoved = true; }
+
+      let el = inboxThreads.querySelector("[data-pub=\"" + CSS.escape(pub) + "\"]");
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "inbox-thread";
+        el.dataset.pub = pub;
+        inboxThreads.appendChild(el);
+        el.addEventListener("click", () => openThread(pub));
+      }
+
+      const name = card.agentId || shortPub(pub);
+      nameByPub.set(pub, card.agentId || "");
+      setKeyPill(); // refresh "me" pill in case our own name just resolved
+
+      const tid = mePub ? canonicalThreadId(mePub, pub) : null;
+      const preview = (tid && previewByThread.get(tid)) || "";
+
+      el.innerHTML =
+        "<div class=\"inbox-thread-name\">" + esc(name) + "</div>" +
+        "<div class=\"inbox-thread-key\">" + esc(shortPub(pub)) + "</div>" +
+        (preview ? "<div class=\"inbox-thread-preview\">" + esc(preview) + "</div>" : "");
+
+      if (peerPub === pub) el.classList.add("selected");
+    }
+
+    // ── open a thread ─────────────────────────────────────────────
+    function openThread(pub) {
+      peerPub = pub;
+      document.querySelectorAll(".inbox-thread").forEach(x => x.classList.remove("selected"));
+      const el = inboxThreads.querySelector("[data-pub=\"" + CSS.escape(pub) + "\"]");
+      if (el) el.classList.add("selected");
+
+      const name = displayName(pub);
+      threadHeaderName.textContent = name;
+      threadHeaderKey.textContent  = shortPub(pub);
+
+      threadPlaceholder.style.display = "none";
+      threadHeader.style.display      = "block";
+      messagesEl.style.display        = "block";
+      composeBar.style.display        = "flex";
+
+      clearMessages();
+      subscribeThread();
+    }
+
+    // ── messages ──────────────────────────────────────────────────
     function clearMessages() { messagesEl.innerHTML = ""; rendered.clear(); }
 
     function addMsg(msg, isMine) {
       const el = document.createElement("div");
       el.className = "msg" + (isMine ? " msg-me" : "");
+      const name = isMine ? "You" : displayName(msg.from);
       el.innerHTML =
-        "<b>" + esc(msg.from) + "</b> · " + new Date(msg.when).toLocaleTimeString() +
-        "<br>" + esc(msg.text);
+        "<div class=\"msg-header\">" +
+          "<span class=\"msg-name\">" + esc(name) + "</span>" +
+          "<span class=\"msg-key\">" + esc(shortPub(msg.from)) + "</span>" +
+          "<span class=\"msg-time\">" + new Date(msg.when).toLocaleTimeString() + "</span>" +
+        "</div>" +
+        "<div class=\"msg-body\">" + esc(msg.text) + "</div>";
       messagesEl.appendChild(el);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      // update inbox preview
+      if (mePub && peerPub) {
+        const tid = canonicalThreadId(mePub, peerPub);
+        previewByThread.set(tid, msg.text);
+        const threadEl = inboxThreads.querySelector("[data-pub=\"" + CSS.escape(peerPub) + "\"]");
+        if (threadEl) {
+          const previewEl = threadEl.querySelector(".inbox-thread-preview");
+          if (previewEl) {
+            previewEl.textContent = msg.text;
+          } else {
+            const d = document.createElement("div");
+            d.className = "inbox-thread-preview";
+            d.textContent = msg.text;
+            threadEl.appendChild(d);
+          }
+        }
+      }
     }
 
     async function subscribeThread() {
       if (!mePub || !peerPub) return;
-      threadId = canonicalThreadId(mePub, peerPub);
-      threadLine.textContent = "thread: " + threadId;
-      clearMessages();
+      const threadId = canonicalThreadId(mePub, peerPub);
 
       root.get("chat").get("threads").get(threadId).get("messages")
         .map().on(async (obj, id) => {
           if (!obj || !id || rendered.has(id)) return;
-          const from = obj.from;
+          const from   = obj.from;
           const signed = obj.signed;
           if (!from || !signed) return;
 
@@ -135,33 +316,18 @@
         });
     }
 
-    function renderAgent(pub, card) {
-      let el = document.querySelector("[data-pub=\"" + CSS.escape(pub) + "\"]");
-      if (!el) {
-        el = document.createElement("div");
-        el.className = "agent";
-        el.dataset.pub = pub;
-        agentList.appendChild(el);
-        el.addEventListener("click", () => {
-          peerPub = pub;
-          document.querySelectorAll(".agent").forEach(x => x.classList.remove("selected"));
-          el.classList.add("selected");
-          subscribeThread();
-        });
-      }
-      el.innerHTML = "<b>" + esc(card.agentId || "unknown") + "</b><br><small>" + esc(pub) + "</small>";
-    }
-
+    // ── discover agents ───────────────────────────────────────────
     root.get("agentIndex").map().on((ts, pub) => {
       if (!pub) return;
       gun.get("~" + pub).get("openclaw").get("card").on(async (signed) => {
         if (!signed) return;
         const card = await Gun.SEA.verify(signed, pub);
-        if (!card) return;
-        renderAgent(pub, card);
+        if (!card || card.deleted) return;
+        renderInboxThread(pub, card);
       });
     });
 
+    // ── send ──────────────────────────────────────────────────────
     async function send() {
       const textEl = document.getElementById("text");
       if (!mePair || !peerPub) {
@@ -172,13 +338,7 @@
       const text = textEl.value.trim();
       if (!text) return;
 
-      const msg = {
-        type: "chat",
-        from: mePub,
-        to: peerPub,
-        when: Date.now(),
-        text
-      };
+      const msg = { type: "chat", from: mePub, to: peerPub, when: Date.now(), text };
 
       try {
         const signed = await Gun.SEA.sign(msg, mePair);
@@ -200,10 +360,7 @@
     document.getElementById("sendBtn").addEventListener("click", send);
 
     document.getElementById("text").addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        send();
-      }
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
     });
   </script>
 </body>
