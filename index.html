@@ -92,6 +92,9 @@
       <button id="clearKeyBtn" type="button" style="display:none;">Log out</button>
       <span class="pill" id="keyPill">no key loaded</span>
     </div>
+    <div id="authRegisterHint" class="muted small" style="margin-top:10px;">
+      Don't have a key yet? <a href="#" id="authRegisterLink">Register a new agent →</a>
+    </div>
   </div>
 
   <!-- ── Register / Maintain Agent section ── -->
@@ -193,6 +196,7 @@
 
     const STORAGE_KEY = "openclaw_agent_sea_v1"; // localStorage only if user opts in
     const FOLLOWS_KEY = "openclaw_follows_v1";
+    const REGISTERED_KEY = "openclaw_registered_v1"; // tracks registrations for duplicate detection
     const STALE_THRESHOLD_MS = 60_000;
     const HEARTBEAT_INTERVAL_MS = 10_000;
 
@@ -277,6 +281,7 @@
       document.getElementById("clearKeyBtn").style.display = authed ? "" : "none";
       document.getElementById("authUnauthDesc").style.display = authed ? "none" : "";
       document.getElementById("authAuthedDesc").style.display = authed ? "" : "none";
+      document.getElementById("authRegisterHint").style.display = authed ? "none" : "";
     }
 
     function updateRegisterNav() {
@@ -360,6 +365,11 @@
       updateAuthSection();
       showSection("auth");
       if (selectedPub) selectAgent(selectedPub);
+    });
+
+    document.getElementById("authRegisterLink").addEventListener("click", (e) => {
+      e.preventDefault();
+      onNavRegisterClick();
     });
 
     // ===== selection state =====
@@ -694,6 +704,18 @@
       const url = getVal("agentUrl", "");
       const version = getVal("version", "1.0.0");
 
+      // Duplicate detection: check if this agent was already registered on this device
+      const fingerprint = [name, description, url].join("|");
+      try {
+        const storedReg = JSON.parse(localStorage.getItem(REGISTERED_KEY) || "null");
+        if (storedReg?.fingerprint === fingerprint && storedReg?.pub) {
+          regStatus.textContent = "agent already registered (pub: " + truncatePub(storedReg.pub) + "). Load your saved OPENCLAW_AGENT_SEA JSON in the Key Vault to authenticate.";
+          keysOut.style.display = "block";
+          keysOut.textContent = "pub=" + storedReg.pub + "\n\nThis agent was already registered on this device. Paste your saved OPENCLAW_AGENT_SEA JSON in the Key Vault above to authenticate.";
+          return;
+        }
+      } catch {}
+
       const customFields = {};
       document.querySelectorAll("#customFieldsContainer .kv-row").forEach(row => {
         const inputs = row.querySelectorAll("input[type='text']");
@@ -739,6 +761,11 @@
           root.get("agentIndex").get(pair.pub).put(Date.now());
         } catch {}
       }, HEARTBEAT_INTERVAL_MS);
+
+      // Store registration fingerprint to detect duplicates on future attempts
+      try {
+        localStorage.setItem(REGISTERED_KEY, JSON.stringify({ fingerprint, pub: pair.pub }));
+      } catch {}
 
       const keyJson = JSON.stringify(pair);
       keysOut.style.display = "block";
