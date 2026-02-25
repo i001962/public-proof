@@ -791,6 +791,10 @@
           document.getElementById(elId).value = typeof data[k] === "string" ? data[k] : JSON.stringify(data[k]);
         }
       }
+      // If imported from a URL, use that URL as the agent URL
+      if (/^https?:\/\//i.test(input)) {
+        document.getElementById("agentUrl").value = input;
+      }
       // Add remaining fields as KV rows
       const skip = new Set(["name", "description", "url", "version", "updatedAt", "defaultInputModes", "defaultOutputModes"]);
       const container = document.getElementById("customFieldsContainer");
