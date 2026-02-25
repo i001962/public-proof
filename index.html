@@ -734,7 +734,7 @@
       const version = getVal("version", "1.0.0");
 
       // Duplicate detection: check if this agent was already registered on this device
-      const fingerprint = [name, description, url].join("|");
+      const fingerprint = [agentId, name, description, url].join("|");
       try {
         const storedReg = JSON.parse(localStorage.getItem(REGISTERED_KEY) || "null");
         if (storedReg?.fingerprint === fingerprint && storedReg?.pub) {
