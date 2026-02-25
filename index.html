@@ -701,6 +701,8 @@
       keysOut.textContent = "";
 
       const agentId = getVal("agentId", "");
+      if (!agentId) { regStatus.textContent = "agentId is required."; return; }
+
       const name = getVal("agentName", "My Agent");
       const description = getVal("agentDesc", "");
       const url = getVal("agentUrl", "");
