@@ -252,6 +252,9 @@
         (preview ? "<div class=\"inbox-thread-preview\">" + esc(preview) + "</div>" : "");
 
       if (peerPub === pub) el.classList.add("selected");
+
+      // Auto-open the first followed thread when no thread is selected yet
+      if (!peerPub) openThread(pub);
     }
 
     // ── open a thread ─────────────────────────────────────────────

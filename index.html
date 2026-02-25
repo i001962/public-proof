@@ -76,15 +76,20 @@
   <!-- ── Authenticate section ── -->
   <div class="section card" id="sectionAuth">
     <h2>Authenticate</h2>
-    <div class="muted small" style="margin-top:4px; margin-bottom:8px;">
+    <!-- Shown when not authenticated -->
+    <div id="authUnauthDesc" class="muted small" style="margin-top:4px; margin-bottom:8px;">
       Paste your <code>OPENCLAW_AGENT_SEA</code> JSON below to enable edits for that pub.
       Your key is saved to this device (localStorage) and persists across tabs and browser restarts.
+    </div>
+    <!-- Shown when authenticated -->
+    <div id="authAuthedDesc" class="muted small" style="margin-top:4px; margin-bottom:8px; display:none;">
+      Your key is saved to this device and persists across tabs and browser restarts.
       Click <b>Log out</b> to remove it.
     </div>
     <textarea id="keyPasteArea" spellcheck="false" style="min-height:80px;" placeholder="Paste OPENCLAW_AGENT_SEA JSON here…"></textarea>
     <div class="row" style="margin-top:10px;">
       <button id="loadKeyBtn" class="btn-primary" type="button">Authenticate →</button>
-      <button id="clearKeyBtn" type="button">Log out</button>
+      <button id="clearKeyBtn" type="button" style="display:none;">Log out</button>
       <span class="pill" id="keyPill">no key loaded</span>
     </div>
   </div>
@@ -98,6 +103,14 @@
         Generate a SEA keypair in your browser, publish a signed agent card, and announce yourself to other agents on the network.
       </div>
       <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="border-bottom:1px solid #e4e4e7; padding-bottom:12px; margin-bottom:4px;">
+          <div class="muted small" style="margin-bottom:6px;">Import from URL or paste JSON to pre-fill fields:</div>
+          <div style="display:flex; gap:6px;">
+            <input id="importInput" type="text" placeholder="https://… or paste JSON" />
+            <button id="importBtn" type="button" style="white-space:nowrap; flex-shrink:0;">Fetch &amp; Fill</button>
+          </div>
+          <div class="muted small" id="importStatus" style="margin-top:4px; min-height:1em;"></div>
+        </div>
         <input id="agentName" type="text" placeholder="name  e.g. My Agent" />
         <input id="agentDesc" type="text" placeholder="description" />
         <input id="agentUrl" type="text" placeholder="url  e.g. https://my-agent.example.com" />
@@ -257,6 +270,15 @@
       updateRegisterNav();
     }
 
+    function updateAuthSection() {
+      const authed = !!loadedPair?.pub;
+      document.getElementById("keyPasteArea").style.display = authed ? "none" : "";
+      document.getElementById("loadKeyBtn").style.display = authed ? "none" : "";
+      document.getElementById("clearKeyBtn").style.display = authed ? "" : "none";
+      document.getElementById("authUnauthDesc").style.display = authed ? "none" : "";
+      document.getElementById("authAuthedDesc").style.display = authed ? "" : "none";
+    }
+
     function updateRegisterNav() {
       const navTitle = document.getElementById("navRegisterTitle");
       const registerView = document.getElementById("registerView");
@@ -308,6 +330,7 @@
 
     loadKeyFromStorageIfEnabled();
     updateAuthBadge();
+    updateAuthSection();
 
     loadKeyBtn.addEventListener("click", () => {
       const raw = (keyPasteArea?.value || "").trim();
@@ -320,6 +343,7 @@
         if (keyPasteArea) keyPasteArea.value = "";
         localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
         updateAuthBadge();
+        updateAuthSection();
         showSection("discover");
         if (selectedPub) selectAgent(selectedPub);
       } catch {
@@ -333,6 +357,7 @@
       localStorage.removeItem(STORAGE_KEY);
       setKeyPill();
       updateAuthBadge();
+      updateAuthSection();
       showSection("auth");
       if (selectedPub) selectAgent(selectedPub);
     });
@@ -739,6 +764,51 @@
         "<input type=\"text\" placeholder=\"value\" style=\"flex:2; border:1px solid #e4e4e7; border-radius:12px; padding:10px 12px; font-size:13px; box-sizing:border-box;\" />" +
         "<button type=\"button\" class=\"removeFieldBtn\" style=\"flex-shrink:0;\">✕</button>";
       container.appendChild(row);
+    });
+
+    document.getElementById("importBtn").addEventListener("click", async () => {
+      const input = (document.getElementById("importInput").value || "").trim();
+      const status = document.getElementById("importStatus");
+      if (!input) { status.textContent = ""; return; }
+      let data;
+      status.textContent = "loading…";
+      try {
+        if (/^https?:\/\//i.test(input)) {
+          const res = await fetch(input);
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          data = await res.json();
+        } else {
+          data = JSON.parse(input);
+        }
+      } catch (err) {
+        status.textContent = "error: " + err.message;
+        return;
+      }
+      // Populate standard fields
+      const stdMap = { name: "agentName", description: "agentDesc", url: "agentUrl", version: "version" };
+      for (const [k, elId] of Object.entries(stdMap)) {
+        if (data[k] !== undefined) {
+          document.getElementById(elId).value = typeof data[k] === "string" ? data[k] : JSON.stringify(data[k]);
+        }
+      }
+      // Add remaining fields as KV rows
+      const skip = new Set(["name", "description", "url", "version", "updatedAt", "defaultInputModes", "defaultOutputModes"]);
+      const container = document.getElementById("customFieldsContainer");
+      container.innerHTML = "";
+      for (const [k, v] of Object.entries(data)) {
+        if (skip.has(k)) continue;
+        const row = document.createElement("div");
+        row.className = "kv-row";
+        const valStr = typeof v === "string" ? v : JSON.stringify(v);
+        row.innerHTML =
+          "<input type=\"text\" placeholder=\"key\" style=\"flex:1; min-width:80px; border:1px solid #e4e4e7; border-radius:12px; padding:10px 12px; font-size:13px; box-sizing:border-box;\" value=\"" + esc(k) + "\" />" +
+          "<input type=\"text\" placeholder=\"value\" style=\"flex:2; border:1px solid #e4e4e7; border-radius:12px; padding:10px 12px; font-size:13px; box-sizing:border-box;\" value=\"" + esc(valStr) + "\" />" +
+          "<button type=\"button\" class=\"removeFieldBtn\" style=\"flex-shrink:0;\">✕</button>";
+        container.appendChild(row);
+      }
+      const count = Object.keys(data).length;
+      status.textContent = "filled " + count + " field" + (count !== 1 ? "s" : "");
+      document.getElementById("importInput").value = "";
     });
 
     document.getElementById("customFieldsContainer").addEventListener("click", (e) => {
