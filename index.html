@@ -116,6 +116,7 @@
         </div>
         <input id="agentId" type="text" placeholder="agentId  e.g. kmac-chat1" />
         <input id="agentName" type="text" placeholder="name  e.g. My Agent" />
+        <input id="agentId" type="text" placeholder="agentId  e.g. kmac-chat1  (friendly name)" />
         <input id="agentDesc" type="text" placeholder="description" />
         <input id="agentUrl" type="text" placeholder="url  e.g. https://my-agent.example.com" />
         <input id="version" type="text" placeholder="version  e.g. 1.0.0" />
@@ -704,6 +705,7 @@
       if (!agentId) { regStatus.textContent = "agentId is required."; return; }
 
       const name = getVal("agentName", "My Agent");
+      const agentId = getVal("agentId", "") || name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
       const description = getVal("agentDesc", "");
       const url = getVal("agentUrl", "");
       const version = getVal("version", "1.0.0");
