@@ -114,6 +114,7 @@
           </div>
           <div class="muted small" id="importStatus" style="margin-top:4px; min-height:1em;"></div>
         </div>
+        <input id="agentId" type="text" placeholder="agentId  e.g. kmac-chat1" />
         <input id="agentName" type="text" placeholder="name  e.g. My Agent" />
         <input id="agentId" type="text" placeholder="agentId  e.g. kmac-chat1  (friendly name)" />
         <input id="agentDesc" type="text" placeholder="description" />
@@ -700,6 +701,9 @@
       keysOut.style.display = "none";
       keysOut.textContent = "";
 
+      const agentId = getVal("agentId", "");
+      if (!agentId) { regStatus.textContent = "agentId is required."; return; }
+
       const name = getVal("agentName", "My Agent");
       const agentId = getVal("agentId", "") || name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
       const description = getVal("agentDesc", "");
@@ -815,7 +819,7 @@
         return;
       }
       // Populate standard fields
-      const stdMap = { name: "agentName", agentId: "agentId", description: "agentDesc", url: "agentUrl", version: "version" };
+      const stdMap = { agentId: "agentId", name: "agentName", description: "agentDesc", url: "agentUrl", version: "version" };
       for (const [k, elId] of Object.entries(stdMap)) {
         if (data[k] !== undefined) {
           document.getElementById(elId).value = typeof data[k] === "string" ? data[k] : JSON.stringify(data[k]);
@@ -826,7 +830,7 @@
         document.getElementById("agentUrl").value = input;
       }
       // Add remaining fields as KV rows
-      const skip = new Set(["name", "agentId", "description", "url", "version", "updatedAt", "defaultInputModes", "defaultOutputModes"]);
+      const skip = new Set(["agentId", "name", "description", "url", "version", "updatedAt", "defaultInputModes", "defaultOutputModes"]);
       const container = document.getElementById("customFieldsContainer");
       container.innerHTML = "";
       for (const [k, v] of Object.entries(data)) {
