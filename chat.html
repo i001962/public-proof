@@ -72,9 +72,9 @@
     <div class="inbox">
       <!-- left: thread list -->
       <div class="inbox-list">
-        <div class="inbox-list-header">Inbox</div>
+        <div class="inbox-list-header">Follows</div>
         <div class="inbox-threads" id="inboxThreads">
-          <div class="inbox-empty" id="inboxEmpty">Discovering agents…</div>
+          <div class="inbox-empty" id="inboxEmpty">No followed agents yet.</div>
         </div>
       </div>
 
@@ -104,7 +104,8 @@
       "https://gun-manhattan.herokuapp.com/gun",
       "https://gun-agent-8786540a978c.herokuapp.com/gun"
     ];
-    const STORAGE_KEY = "openclaw_chat_sea_v1";
+    const STORAGE_KEY = "openclaw_agent_sea_v1";
+    const FOLLOWS_KEY = "openclaw_follows_v1";
     const MESSAGE_ID_LENGTH = 9;
     const SHORT_PUB_PREFIX = 8;
     const SHORT_PUB_SUFFIX = 4;
@@ -127,6 +128,7 @@
     const sendStatus     = document.getElementById("sendStatus");
 
     // ── state ─────────────────────────────────────────────────────
+    const followedPubs = new Set(JSON.parse(localStorage.getItem(FOLLOWS_KEY) || "[]"));
     let mePair = null;
     let mePub  = null;
     let peerPub = null;
@@ -220,6 +222,8 @@
     function renderInboxThread(pub, card) {
       // Don't show the current user in the inbox list
       if (mePub && pub === mePub) return;
+      // Only show agents that are followed
+      if (!followedPubs.has(pub)) return;
       // Remove "discovering" placeholder once we have at least one agent
       if (!inboxEmptyRemoved) { inboxEmpty.remove(); inboxEmptyRemoved = true; }
 
