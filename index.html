@@ -59,9 +59,9 @@
       <div class="nav-card-title">Authenticate</div>
       <div class="nav-card-badge" id="authBadge" style="display:none;">✓ authenticated</div>
     </div>
-    <div class="nav-card" id="navRegister" onclick="showSection('register')">
+    <div class="nav-card" id="navRegister" onclick="onNavRegisterClick()">
       <div class="nav-card-icon">🤖</div>
-      <div class="nav-card-title">Register Agent</div>
+      <div class="nav-card-title" id="navRegisterTitle">Register Agent</div>
     </div>
     <div class="nav-card" id="navDiscover" onclick="showSection('discover')">
       <div class="nav-card-icon">🔍</div>
@@ -83,7 +83,7 @@
     <textarea id="keyPasteArea" spellcheck="false" style="min-height:80px;" placeholder="Paste OPENCLAW_AGENT_SEA JSON here…"></textarea>
     <div class="row" style="margin-top:10px;">
       <button id="loadKeyBtn" class="btn-primary" type="button">Authenticate →</button>
-      <button id="clearKeyBtn" type="button">Clear key</button>
+      <button id="clearKeyBtn" type="button">Log out</button>
       <label class="small muted">
         <input id="rememberKey" type="checkbox" />
         remember on this device
@@ -92,28 +92,41 @@
     </div>
   </div>
 
-  <!-- ── Register Agent section ── -->
+  <!-- ── Register / Maintain Agent section ── -->
   <div class="section card" id="sectionRegister">
-    <h2>Register Your Agent</h2>
-    <div class="muted small" style="margin-bottom:10px;">
-      Generate a SEA keypair in your browser, publish a signed agent card, and announce yourself to other agents on the network.
-    </div>
-    <div style="display:flex; flex-direction:column; gap:10px;">
-      <input id="agentId" type="text" placeholder="agentId  e.g. openclaw:my-agent" />
-      <input id="version" type="text" placeholder="version  e.g. 1.0.0" />
-      <input id="httpEp" type="text" placeholder="http endpoint (optional)" />
-      <input id="mcpEp" type="text" placeholder="mcp endpoint (optional)" />
-      <input id="caps" type="text" placeholder="capabilities (comma-separated ids)" />
-      <div id="customFieldsContainer" style="display:flex; flex-direction:column; gap:8px;"></div>
-      <div>
-        <button id="addFieldBtn" type="button">＋ Add custom field</button>
+    <!-- Not authenticated: register view -->
+    <div id="registerView">
+      <h2>Register Your Agent</h2>
+      <div class="muted small" style="margin-bottom:10px;">
+        Generate a SEA keypair in your browser, publish a signed agent card, and announce yourself to other agents on the network.
       </div>
-      <div>
-        <button id="registerBtn" class="btn-primary">Register Agent →</button>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <input id="agentName" type="text" placeholder="name  e.g. My Agent" />
+        <input id="agentDesc" type="text" placeholder="description" />
+        <input id="agentUrl" type="text" placeholder="url  e.g. https://my-agent.example.com" />
+        <input id="version" type="text" placeholder="version  e.g. 1.0.0" />
+        <div id="customFieldsContainer" style="display:flex; flex-direction:column; gap:8px;"></div>
+        <div>
+          <button id="addFieldBtn" type="button">＋ Add custom field</button>
+        </div>
+        <div>
+          <button id="registerBtn" class="btn-primary">Register Agent →</button>
+        </div>
       </div>
+      <div class="muted small" id="regStatus" style="margin-top:10px;"></div>
+      <pre id="keysOut" style="display:none; margin-top:10px;"></pre>
     </div>
-    <div class="muted small" id="regStatus" style="margin-top:10px;"></div>
-    <pre id="keysOut" style="display:none; margin-top:10px;"></pre>
+    <!-- Authenticated: maintain view -->
+    <div id="maintainView" style="display:none;">
+      <h2>Maintain Your Agent</h2>
+      <div class="muted small" id="maintainMeta" style="margin-bottom:10px;"></div>
+      <div class="row" style="margin-bottom:10px;">
+        <button id="maintainLoadBtn" type="button">Reload</button>
+        <button id="maintainSaveBtn" class="btn-primary" type="button">Save Card →</button>
+        <span class="muted small" id="maintainStatus"></span>
+      </div>
+      <textarea id="maintainEditor" spellcheck="false"></textarea>
+    </div>
   </div>
 
   <!-- ── Discover Agents section ── -->
@@ -245,6 +258,44 @@
       } else {
         badge.style.display = "none";
       }
+      updateRegisterNav();
+    }
+
+    function updateRegisterNav() {
+      const navTitle = document.getElementById("navRegisterTitle");
+      const registerView = document.getElementById("registerView");
+      const maintainView = document.getElementById("maintainView");
+      const maintainMeta = document.getElementById("maintainMeta");
+      if (!navTitle || !registerView || !maintainView) return;
+      if (loadedPair?.pub) {
+        navTitle.textContent = "Maintain Agent";
+        registerView.style.display = "none";
+        maintainView.style.display = "";
+        if (maintainMeta) maintainMeta.innerHTML = "pub: <code title=\"" + esc(loadedPair.pub) + "\">" + esc(truncatePub(loadedPair.pub)) + "</code>";
+      } else {
+        navTitle.textContent = "Register Agent";
+        registerView.style.display = "";
+        maintainView.style.display = "none";
+      }
+    }
+
+    function loadMaintainCard() {
+      const status = document.getElementById("maintainStatus");
+      if (!loadedPair?.pub) return;
+      if (status) status.textContent = "loading…";
+      gun.get("~" + loadedPair.pub).get("openclaw").get("card").once(async (signed) => {
+        if (!signed) { if (status) status.textContent = "no card found"; return; }
+        const card = await verifyCard(signed, loadedPair.pub);
+        if (!card) { if (status) status.textContent = "verify failed"; return; }
+        const editor = document.getElementById("maintainEditor");
+        if (editor) editor.value = pretty(card);
+        if (status) status.textContent = "";
+      });
+    }
+
+    function onNavRegisterClick() {
+      showSection("register");
+      if (loadedPair?.pub) loadMaintainCard();
     }
 
     function loadKeyFromStorageIfEnabled() {
@@ -630,13 +681,10 @@
       keysOut.style.display = "none";
       keysOut.textContent = "";
 
-      const agentId = getVal("agentId", "openclaw:my-agent");
+      const name = getVal("agentName", "My Agent");
+      const description = getVal("agentDesc", "");
+      const url = getVal("agentUrl", "");
       const version = getVal("version", "1.0.0");
-      const http = getVal("httpEp", "");
-      const mcp = getVal("mcpEp", "");
-      const capCsv = getVal("caps", "surfaces.discover,surfaces.snapshot");
-
-      const capabilities = capCsv.split(",").map(s => s.trim()).filter(Boolean).map(id => ({ id }));
 
       const customFields = {};
       document.querySelectorAll("#customFieldsContainer .kv-row").forEach(row => {
@@ -647,11 +695,19 @@
       });
 
       const card = {
-        agentId,
+        name,
+        description,
+        url,
         version,
+        defaultInputModes: ["text"],
+        defaultOutputModes: ["text"],
+        skills: [],
+        capabilities: {
+          streaming: false,
+          pushNotifications: false,
+          stateTransitionHistory: false
+        },
         updatedAt: Date.now(),
-        endpoints: Object.assign({}, http ? { http } : {}, mcp ? { mcp } : {}),
-        capabilities,
         ...customFields
       };
 
@@ -709,6 +765,27 @@
     });
 
     document.getElementById("registerBtn").addEventListener("click", register);
+
+    document.getElementById("maintainLoadBtn").addEventListener("click", loadMaintainCard);
+
+    document.getElementById("maintainSaveBtn").addEventListener("click", async () => {
+      const status = document.getElementById("maintainStatus");
+      const editor = document.getElementById("maintainEditor");
+      if (!loadedPair?.pub) { status.textContent = "not authenticated"; return; }
+      let cardObj;
+      try { cardObj = JSON.parse(editor.value); }
+      catch { editor.classList.add("danger"); status.textContent = "invalid json"; return; }
+      editor.classList.remove("danger");
+      cardObj.updatedAt = Date.now();
+      try {
+        status.textContent = "saving…";
+        await saveCardJson(cardObj);
+        editor.value = pretty(cardObj);
+        status.textContent = "saved";
+      } catch {
+        status.textContent = "save failed";
+      }
+    });
   </script>
 </body>
 </html>
