@@ -242,8 +242,8 @@
         el.addEventListener("click", () => openThread(pub));
       }
 
-      const name = card.agentId || shortPub(pub);
-      nameByPub.set(pub, card.agentId || "");
+      const name = card.name || card.agentId || shortPub(pub);
+      nameByPub.set(pub, card.name || card.agentId || "");
       setKeyPill(); // refresh "me" pill in case our own name just resolved
 
       const tid = mePub ? canonicalThreadId(mePub, pub) : null;
