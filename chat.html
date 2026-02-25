@@ -29,9 +29,9 @@
     .thread-header-name { font-weight: 600; font-size: 14px; color: #18181b; }
     .thread-header-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; margin-top: 2px; }
     .thread-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: #a1a1aa; font-size: 13px; }
-    .messages { flex: 1; overflow-y: auto; background: #fafafa; padding: 12px; }
-    .msg { border: 1px solid #e4e4e7; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; background: white; }
-    .msg-me { border-color: #bfdbfe; background: #eff6ff; }
+    .messages { flex: 1; overflow-y: auto; background: #fafafa; padding: 12px; display: flex; flex-direction: column; }
+    .msg { border: 1px solid #e4e4e7; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; background: white; max-width: 75%; align-self: flex-start; }
+    .msg-me { border-color: #bfdbfe; background: #eff6ff; align-self: flex-end; margin-left: 25%; }
     .msg-header { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
     .msg-name { font-weight: 600; font-size: 13px; }
     .msg-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; }
@@ -131,6 +131,7 @@
     let mePub  = null;
     let peerPub = null;
     let rendered = new Set();
+    let renderedContent = new Set();
 
     // name registry: pub → agentId (from verified card)
     const nameByPub = new Map();
@@ -195,6 +196,9 @@
         mePair = pair;
         mePub  = pair.pub;
         setKeyPill();
+        // remove self from inbox list if already rendered
+        const meEl = inboxThreads.querySelector(`[data-pub="${CSS.escape(mePub)}"]`);
+        if (meEl) meEl.remove();
         if (rememberKey.checked) localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
       } catch {
         mePair = null;
@@ -213,6 +217,8 @@
 
     // ── inbox thread list ─────────────────────────────────────────
     function renderInboxThread(pub, card) {
+      // Don't show the current user in the inbox list
+      if (mePub && pub === mePub) return;
       // Remove "discovering" placeholder once we have at least one agent
       if (!inboxEmptyRemoved) { inboxEmpty.remove(); inboxEmptyRemoved = true; }
 
@@ -261,7 +267,7 @@
     }
 
     // ── messages ──────────────────────────────────────────────────
-    function clearMessages() { messagesEl.innerHTML = ""; rendered.clear(); }
+    function clearMessages() { messagesEl.innerHTML = ""; rendered.clear(); renderedContent.clear(); }
 
     function addMsg(msg, isMine) {
       const el = document.createElement("div");
@@ -312,6 +318,9 @@
           if (!verified) return;
 
           rendered.add(id);
+          const contentKey = JSON.stringify([verified.from, verified.when, verified.text]);
+          if (renderedContent.has(contentKey)) return;
+          renderedContent.add(contentKey);
           addMsg(verified, from === mePub);
         });
     }
