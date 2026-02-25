@@ -131,7 +131,7 @@
   </div>
 
   <!-- ── Authenticate ── -->
-  <div class="card">
+  <div class="card" id="authCard">
     <h2>Authenticate</h2>
     <div class="muted small" style="margin-bottom:8px;">
       Paste your <code>OPENCLAW_AGENT_SEA</code> JSON below to enable edits for that pub.
@@ -238,6 +238,7 @@
     }
 
     loadKeyFromStorageIfEnabled();
+    if (loadedPair) document.getElementById("authCard").style.display = "none";
 
     rememberKey.addEventListener("change", () => {
       if (!rememberKey.checked) {
@@ -257,6 +258,7 @@
         setKeyPill();
         if (keyPasteArea) keyPasteArea.value = "";
         if (rememberKey.checked) localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
+        document.getElementById("authCard").style.display = "none";
       } catch {
         loadedPair = null;
         setKeyPill();
@@ -268,6 +270,7 @@
       rememberKey.checked = false;
       localStorage.removeItem(STORAGE_KEY);
       setKeyPill();
+      document.getElementById("authCard").style.display = "";
     });
 
     // ===== selection state =====
