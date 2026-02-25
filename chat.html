@@ -132,6 +132,7 @@
     let peerPub = null;
     let rendered = new Set();
     let renderedContent = new Set();
+    let msgBuffer = [];
 
     // name registry: pub → agentId (from verified card)
     const nameByPub = new Map();
@@ -267,35 +268,42 @@
     }
 
     // ── messages ──────────────────────────────────────────────────
-    function clearMessages() { messagesEl.innerHTML = ""; rendered.clear(); renderedContent.clear(); }
+    function clearMessages() { messagesEl.innerHTML = ""; rendered.clear(); renderedContent.clear(); msgBuffer = []; }
 
     function addMsg(msg, isMine) {
-      const el = document.createElement("div");
-      el.className = "msg" + (isMine ? " msg-me" : "");
-      const name = isMine ? "You" : displayName(msg.from);
-      el.innerHTML =
-        "<div class=\"msg-header\">" +
-          "<span class=\"msg-name\">" + esc(name) + "</span>" +
-          "<span class=\"msg-key\">" + esc(shortPub(msg.from)) + "</span>" +
-          "<span class=\"msg-time\">" + new Date(msg.when).toLocaleTimeString() + "</span>" +
-        "</div>" +
-        "<div class=\"msg-body\">" + esc(msg.text) + "</div>";
-      messagesEl.appendChild(el);
+      msgBuffer.push({ msg, isMine });
+      msgBuffer.sort((a, b) => a.msg.when - b.msg.when);
+
+      messagesEl.innerHTML = "";
+      for (const item of msgBuffer) {
+        const el = document.createElement("div");
+        el.className = "msg" + (item.isMine ? " msg-me" : "");
+        const name = item.isMine ? "You" : displayName(item.msg.from);
+        el.innerHTML =
+          "<div class=\"msg-header\">" +
+            "<span class=\"msg-name\">" + esc(name) + "</span>" +
+            "<span class=\"msg-key\">" + esc(shortPub(item.msg.from)) + "</span>" +
+            "<span class=\"msg-time\">" + new Date(item.msg.when).toLocaleTimeString() + "</span>" +
+          "</div>" +
+          "<div class=\"msg-body\">" + esc(item.msg.text) + "</div>";
+        messagesEl.appendChild(el);
+      }
       messagesEl.scrollTop = messagesEl.scrollHeight;
 
-      // update inbox preview
+      // update inbox preview with the most recent message by timestamp
       if (mePub && peerPub) {
+        const latestMsg = msgBuffer[msgBuffer.length - 1].msg;
         const tid = canonicalThreadId(mePub, peerPub);
-        previewByThread.set(tid, msg.text);
+        previewByThread.set(tid, latestMsg.text);
         const threadEl = inboxThreads.querySelector("[data-pub=\"" + CSS.escape(peerPub) + "\"]");
         if (threadEl) {
           const previewEl = threadEl.querySelector(".inbox-thread-preview");
           if (previewEl) {
-            previewEl.textContent = msg.text;
+            previewEl.textContent = latestMsg.text;
           } else {
             const d = document.createElement("div");
             d.className = "inbox-thread-preview";
-            d.textContent = msg.text;
+            d.textContent = latestMsg.text;
             threadEl.appendChild(d);
           }
         }
