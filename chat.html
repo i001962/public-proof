@@ -12,14 +12,17 @@
     .agent { border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px; margin-top: 10px; cursor: pointer; }
     .agent:hover { background: #fafafa; }
     .selected { outline: 2px solid #a1a1aa; }
-    .messages { height: 420px; overflow: auto; background: #fafafa; border: 1px solid #e4e4e7; border-radius: 14px; padding: 12px; }
-    .msg { border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px; margin-bottom: 10px; background: white; }
-    .msg-me { border-color: #a1a1aa; }
+    .messages { height: 420px; overflow: auto; background: #fafafa; border: 1px solid #e4e4e7; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .msg { border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px; max-width: 70%; background: white; align-self: flex-start; }
+    .msg-me { border-color: #a1a1aa; align-self: flex-end; background: #f0f9ff; }
     button { border: 1px solid #d4d4d8; background: white; border-radius: 12px; padding: 10px 12px; cursor: pointer; }
     button:hover { background: #f4f4f5; }
     input[type="text"] { border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px 12px; width: 100%; max-width: 520px; box-sizing: border-box; }
     .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
     .muted { color: #52525b; font-size: 12px; }
+    label { display: flex; gap: 6px; align-items: center; }
+    .del-btn { background: none; border: none; color: #a1a1aa; cursor: pointer; padding: 0 0 0 8px; font-size: 14px; line-height: 1; }
+    .del-btn:hover { color: #ef4444; background: none; }
     .nav { margin-bottom: 8px; }
     .nav a { color: #3b82f6; text-decoration: none; font-size: 14px; }
     .nav a:hover { text-decoration: underline; }
@@ -34,6 +37,11 @@
     <div class="card">
       <div class="row">
         <button id="pasteKeyBtn" type="button">Paste OPENCLAW_AGENT_SEA</button>
+        <button id="clearKeyBtn" type="button">Clear key</button>
+        <label class="muted">
+          <input id="rememberKey" type="checkbox" />
+          remember on this device
+        </label>
         <span id="meLine" class="muted"></span>
       </div>
     </div>
@@ -63,6 +71,8 @@
       "https://gun-agent-8786540a978c.herokuapp.com/gun"
     ];
 
+    const CHAT_STORAGE_KEY = "openclaw_chat_sea_v1";
+
     const gun = GUN({ peers: PEERS, localStorage: true, radisk: false });
     const root = gun.get("openclaw");
 
@@ -71,19 +81,65 @@
     const threadLine = document.getElementById("threadLine");
     const meLine = document.getElementById("meLine");
     const sendStatus = document.getElementById("sendStatus");
+    const rememberKey = document.getElementById("rememberKey");
 
     const MESSAGE_ID_LENGTH = 9;
+    let mePair = null;
     let mePub = null;
     let peerPub = null;
     let threadId = null;
     let rendered = new Set();
     let threadSub = null;
+    const agentNames = new Map(); // pub -> agentId
 
     function esc(s) {
       return String(s).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
     }
 
     function canonicalThreadId(a, b) { return [a, b].sort().join("__"); }
+
+    function fetchAgentName(pub) {
+      if (agentNames.has(pub)) return;
+      gun.get("~" + pub).get("openclaw").get("card").once(async (signed) => {
+        if (!signed) return;
+        const card = await Gun.SEA.verify(signed, pub);
+        if (card?.agentId) agentNames.set(pub, card.agentId);
+      });
+    }
+
+    function updateMeLine() {
+      if (!mePub) { meLine.textContent = ""; return; }
+      const name = agentNames.get(mePub);
+      meLine.textContent = "me: " + (name || mePub);
+      if (!name) {
+        gun.get("~" + mePub).get("openclaw").get("card").once(async (signed) => {
+          if (!signed) return;
+          const card = await Gun.SEA.verify(signed, mePub);
+          if (card?.agentId) { agentNames.set(mePub, card.agentId); meLine.textContent = "me: " + card.agentId; }
+        });
+      }
+    }
+
+    function loadKeyFromStorage() {
+      const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const pair = JSON.parse(raw);
+        if (pair?.pub && pair?.priv) {
+          mePair = pair;
+          mePub = pair.pub;
+          rememberKey.checked = true;
+          updateMeLine();
+        }
+      } catch {}
+    }
+
+    loadKeyFromStorage();
+
+    rememberKey.addEventListener("change", () => {
+      if (!rememberKey.checked) { localStorage.removeItem(CHAT_STORAGE_KEY); return; }
+      if (mePair) localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(mePair));
+    });
 
     document.getElementById("pasteKeyBtn").addEventListener("click", () => {
       const raw = prompt("Paste OPENCLAW_AGENT_SEA JSON:");
@@ -93,7 +149,8 @@
         if (!pair?.pub || !pair?.priv) throw new Error("bad pair");
         mePair = pair;
         mePub = pair.pub;
-        meLine.textContent = "me: " + mePub;
+        if (rememberKey.checked) localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(pair));
+        updateMeLine();
       } catch {
         mePair = null;
         mePub = null;
@@ -101,22 +158,48 @@
       }
     });
 
+    document.getElementById("clearKeyBtn").addEventListener("click", () => {
+      mePair = null;
+      mePub = null;
+      rememberKey.checked = false;
+      localStorage.removeItem(CHAT_STORAGE_KEY);
+      meLine.textContent = "";
+    });
+
     function clearMessages() { messagesEl.innerHTML = ""; rendered.clear(); }
 
-    function addMsg(msg, isMine) {
+    function addMsg(msg, isMine, msgId) {
       const el = document.createElement("div");
       el.className = "msg" + (isMine ? " msg-me" : "");
+      const senderName = agentNames.get(msg.from) || msg.from;
       el.innerHTML =
-        "<b>" + esc(msg.from) + "</b> · " + new Date(msg.when).toLocaleTimeString() +
-        "<br>" + esc(msg.text);
+        "<div><b>" + esc(senderName) + "</b> · " + new Date(msg.when).toLocaleTimeString() +
+        (isMine ? "<button type='button' class='del-btn' title='Remove message' data-msgid='" + esc(msgId) + "'>×</button>" : "") +
+        "</div>" +
+        "<div>" + esc(msg.text) + "</div>";
+      // Lazily resolve peer name if not yet cached
+      if (!agentNames.has(msg.from)) fetchAgentName(msg.from);
       messagesEl.appendChild(el);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    messagesEl.addEventListener("click", (e) => {
+      const btn = e.target.closest(".del-btn");
+      if (!btn || !threadId) return;
+      const id = btn.getAttribute("data-msgid");
+      if (!id) return;
+      // Setting a GunDB node to null removes it from the graph
+      root.get("chat").get("threads").get(threadId).get("messages").get(id).put(null);
+      btn.closest(".msg").remove();
+      rendered.delete(id);
+    });
+
     async function subscribeThread() {
       if (!mePub || !peerPub) return;
       threadId = canonicalThreadId(mePub, peerPub);
-      threadLine.textContent = "thread: " + threadId;
+      const peerName = agentNames.get(peerPub) || peerPub;
+      const myName = agentNames.get(mePub) || mePub;
+      threadLine.textContent = "thread: " + myName + " ↔ " + peerName;
       clearMessages();
 
       root.get("chat").get("threads").get(threadId).get("messages")
@@ -131,11 +214,12 @@
           if (!verified) return;
 
           rendered.add(id);
-          addMsg(verified, from === mePub);
+          addMsg(verified, from === mePub, id);
         });
     }
 
     function renderAgent(pub, card) {
+      agentNames.set(pub, card.agentId || pub);
       let el = document.querySelector("[data-pub=\"" + CSS.escape(pub) + "\"]");
       if (!el) {
         el = document.createElement("div");
