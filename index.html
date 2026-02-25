@@ -93,10 +93,20 @@
 
   </div>
 
+  <!-- ── Following: agents you follow ── -->
+  <div class="card" id="followsSection" style="display:none;">
+    <div class="row" style="justify-content: space-between; margin-bottom:8px;">
+      <h2 style="margin:0;">Following</h2>
+      <a href="chat.html" class="chat-cta" style="margin-top:0; padding:6px 12px; font-size:13px;">💬 Chat with Agents →</a>
+    </div>
+    <div class="muted small" style="margin-bottom:10px;">Agents you are following. Click an agent to inspect or manage its card.</div>
+    <div id="followsList"></div>
+  </div>
+
   <!-- ── Progressive disclosure: agent detail (hidden until selection) ── -->
   <div class="card" id="detailsCard" style="display:none;">
     <div class="row" style="justify-content: space-between;">
-      <h2 style="margin:0;">selected agent</h2>
+      <h2 style="margin:0;">Maintain Agent Card</h2>
       <div class="row">
         <button id="copyPubBtn" type="button">Copy pub</button>
         <button id="closeDetailsBtn" type="button">Close</button>
@@ -120,15 +130,16 @@
     <textarea id="cardEditor" spellcheck="false"></textarea>
   </div>
 
-  <!-- ── Secondary: key vault ── -->
+  <!-- ── Authenticate ── -->
   <div class="card">
-    <h2>key vault</h2>
-    <div class="muted small">
-      Paste your <code>OPENCLAW_AGENT_SEA</code> JSON here to enable edits for that pub.
+    <h2>Authenticate</h2>
+    <div class="muted small" style="margin-bottom:8px;">
+      Paste your <code>OPENCLAW_AGENT_SEA</code> JSON below to enable edits for that pub.
       By default it stays in memory (this tab). Optionally remember it on this device.
     </div>
+    <textarea id="keyPasteArea" spellcheck="false" style="min-height:80px;" placeholder="Paste OPENCLAW_AGENT_SEA JSON here…"></textarea>
     <div class="row" style="margin-top:10px;">
-      <button id="pasteKeyBtn" type="button">Paste key JSON</button>
+      <button id="loadKeyBtn" class="btn-primary" type="button">Authenticate →</button>
       <button id="clearKeyBtn" type="button">Clear key</button>
       <label class="small muted">
         <input id="rememberKey" type="checkbox" />
@@ -154,6 +165,7 @@
     ];
 
     const STORAGE_KEY = "openclaw_agent_sea_v1"; // localStorage only if user opts in
+    const FOLLOWS_KEY = "openclaw_follows_v1";
     const STALE_THRESHOLD_MS = 60_000;
     const HEARTBEAT_INTERVAL_MS = 10_000;
 
@@ -175,10 +187,12 @@
     const saveCardBtn = document.getElementById("saveCardBtn");
     const nullifyBtn = document.getElementById("nullifyBtn");
 
-    const pasteKeyBtn = document.getElementById("pasteKeyBtn");
+    const pasteKeyBtn = null; // replaced by loadKeyBtn + textarea
+    const loadKeyBtn = document.getElementById("loadKeyBtn");
     const clearKeyBtn = document.getElementById("clearKeyBtn");
     const rememberKey = document.getElementById("rememberKey");
     const keyPill = document.getElementById("keyPill");
+    const keyPasteArea = document.getElementById("keyPasteArea");
 
     function esc(s) {
       return String(s).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
@@ -198,6 +212,9 @@
 
     // ===== key vault state =====
     let loadedPair = null; // { pub, priv, epub, epriv }
+
+    // ===== follows state =====
+    let followedPubs = new Set(JSON.parse(localStorage.getItem(FOLLOWS_KEY) || "[]"));
 
     function setKeyPill() {
       if (!loadedPair?.pub) {
@@ -230,14 +247,15 @@
       if (loadedPair) localStorage.setItem(STORAGE_KEY, JSON.stringify(loadedPair));
     });
 
-    pasteKeyBtn.addEventListener("click", () => {
-      const raw = prompt("Paste OPENCLAW_AGENT_SEA JSON:");
+    loadKeyBtn.addEventListener("click", () => {
+      const raw = (keyPasteArea?.value || "").trim();
       if (!raw) return;
       try {
         const pair = JSON.parse(raw);
         if (!pair?.pub || !pair?.priv) throw new Error("bad pair");
         loadedPair = pair;
         setKeyPill();
+        if (keyPasteArea) keyPasteArea.value = "";
         if (rememberKey.checked) localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
       } catch {
         loadedPair = null;
@@ -281,6 +299,40 @@
     }
 
     closeDetailsBtn.addEventListener("click", closeDetails);
+
+    // ===== follows section =====
+    function renderFollowsSection() {
+      const section = document.getElementById("followsSection");
+      const list = document.getElementById("followsList");
+      if (followedPubs.size === 0) {
+        section.style.display = "none";
+        return;
+      }
+      section.style.display = "block";
+      list.innerHTML = "";
+      for (const pub of followedPubs) {
+        const rec = latestByPub.get(pub);
+        const card = rec?.card || {};
+        const live = liveness(rec?.hb);
+        const div = document.createElement("div");
+        div.className = "agent";
+        div.setAttribute("data-agent-tile", "true");
+        div.setAttribute("data-pub", pub);
+        div.innerHTML =
+          "<div class=\"row\" style=\"justify-content: space-between; align-items: flex-start;\">" +
+            "<div>" +
+              "<div><b>" + esc(card.agentId || "unknown") + "</b> <span class=\"pill\">" + esc(live) + "</span>" +
+              (card.version ? " <span class=\"muted small\">v" + esc(card.version) + "</span>" : "") + "</div>" +
+              "<div class=\"small muted\" style=\"margin-top:3px;\">pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code></div>" +
+            "</div>" +
+            "<button type=\"button\" class=\"unfollowBtn\" data-pub=\"" + esc(pub) + "\">Unfollow</button>" +
+          "</div>";
+        list.appendChild(div);
+      }
+    }
+
+    // initialise follows section from persisted state
+    renderFollowsSection();
 
     copyPubBtn.addEventListener("click", async () => {
       if (!selectedPub) return;
@@ -328,7 +380,7 @@
         "<div><b>" + esc(card.agentId || "unknown") + "</b> <span class=\"pill\">" + esc(live) + "</span>" + (card.version ? " <span class=\"muted small\">v" + esc(card.version) + "</span>" : "") + "</div>" +
         "<div class=\"small muted\" style=\"margin-top:3px;\">pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code></div>" +
         "</div>" +
-        "<button type=\"button\" class=\"copyPubInlineBtn\" data-pub=\"" + esc(pub) + "\" title=\"Copy full pub key\">Copy pub</button>" +
+        "<button type=\"button\" class=\"followInlineBtn\" data-pub=\"" + esc(pub) + "\"" + (followedPubs.has(pub) ? " style=\"background:#f0fdf4;border-color:#86efac;\"" : "") + ">" + (followedPubs.has(pub) ? "Following ✓" : "Follow") + "</button>" +
         "</div>" +
         (endpoints.http ? "<div class=\"small\" style=\"margin-top:4px;\">http: <code>" + esc(endpoints.http) + "</code></div>" : "") +
         (endpoints.mcp ? "<div class=\"small\" style=\"margin-top:2px;\">mcp: <code>" + esc(endpoints.mcp) + "</code></div>" : "") +
@@ -355,18 +407,39 @@
         detailsMeta.innerHTML =
           "pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code> · status: <span class=\"pill\">" + esc(liveness(rec.hb)) + "</span> · updatedAt: " + (rec.card.updatedAt ? new Date(rec.card.updatedAt).toLocaleString() : "?");
       }
+
+      if (followedPubs.has(pub)) renderFollowsSection();
     }
 
     document.addEventListener("click", async (e) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
 
-      const copyInline = target.closest("button.copyPubInlineBtn");
-      if (copyInline) {
+      const followBtn = target.closest("button.followInlineBtn");
+      if (followBtn) {
         e.stopPropagation();
-        const pub = copyInline.getAttribute("data-pub");
+        const pub = followBtn.getAttribute("data-pub");
         if (!pub) return;
-        try { await navigator.clipboard.writeText(pub); } catch {}
+        if (followedPubs.has(pub)) {
+          followedPubs.delete(pub);
+        } else {
+          followedPubs.add(pub);
+        }
+        localStorage.setItem(FOLLOWS_KEY, JSON.stringify([...followedPubs]));
+        renderOrUpdateAgentTile(pub);
+        renderFollowsSection();
+        return;
+      }
+
+      const unfollowBtn = target.closest("button.unfollowBtn");
+      if (unfollowBtn) {
+        e.stopPropagation();
+        const pub = unfollowBtn.getAttribute("data-pub");
+        if (!pub) return;
+        followedPubs.delete(pub);
+        localStorage.setItem(FOLLOWS_KEY, JSON.stringify([...followedPubs]));
+        renderOrUpdateAgentTile(pub);
+        renderFollowsSection();
         return;
       }
 
