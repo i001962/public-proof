@@ -111,7 +111,7 @@
           </div>
           <div class="muted small" id="importStatus" style="margin-top:4px; min-height:1em;"></div>
         </div>
-        <input id="agentName" type="text" placeholder="name  e.g. My Agent" />
+        <input id="agentName" type="text" placeholder="name  e.g. My Agent  (required)" />
         <input id="agentDesc" type="text" placeholder="description" />
         <input id="agentUrl" type="text" placeholder="url  e.g. https://my-agent.example.com" />
         <input id="version" type="text" placeholder="version  e.g. 1.0.0" />
@@ -237,6 +237,9 @@
     function truncatePub(pub) {
       if (!pub || pub.length <= 16) return pub;
       return pub.slice(0, 8) + "…" + pub.slice(-6); // first8…last6
+    }
+    function agentDisplayName(pub, card) {
+      return (card && (card.name || card.agentId)) || truncatePub(pub);
     }
     function setSaveStatus(msg) { saveStatus.textContent = msg || ""; }
 
@@ -423,7 +426,7 @@
         div.innerHTML =
           "<div class=\"row\" style=\"justify-content: space-between; align-items: flex-start;\">" +
             "<div>" +
-              "<div><b>" + esc(card.agentId || "unknown") + "</b> <span class=\"pill\">" + esc(live) + "</span>" +
+              "<div><b>" + esc(agentDisplayName(pub, card)) + "</b> <span class=\"pill\">" + esc(live) + "</span>" +
               (card.version ? " <span class=\"muted small\">v" + esc(card.version) + "</span>" : "") + "</div>" +
               "<div class=\"small muted\" style=\"margin-top:3px;\">pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code></div>" +
             "</div>" +
@@ -441,9 +444,12 @@
         if (!query) { el.style.display = ""; return; }
         const pub = (el.getAttribute("data-pub") || "").toLowerCase();
         const rec = latestByPub.get(el.getAttribute("data-pub"));
-        const agentId = (rec?.card?.agentId || "").toLowerCase();
-        const caps = (rec?.card?.capabilities || []).map(c => c.id).join(" ").toLowerCase();
-        el.style.display = (agentId.includes(query) || pub.includes(query) || caps.includes(query)) ? "" : "none";
+        const card = rec?.card || {};
+        // search pub key and all string values in the card
+        const cardText = Object.values(card)
+          .map(v => typeof v === "string" ? v : (Array.isArray(v) ? v.map(c => typeof c === "object" ? JSON.stringify(c) : c).join(" ") : ""))
+          .join(" ").toLowerCase();
+        el.style.display = (pub.includes(query) || cardText.includes(query)) ? "" : "none";
       });
     }
     agentSearch.addEventListener("input", applySearchFilter);
@@ -489,18 +495,27 @@
       const caps = Array.isArray(card.capabilities) ? card.capabilities : [];
       const live = liveness(rec.hb);
 
+      // collect extra kv pairs beyond the well-known fields to display flexibly
+      const knownFields = new Set(["name", "agentId", "description", "url", "version", "updatedAt",
+        "defaultInputModes", "defaultOutputModes", "skills", "capabilities", "endpoints", "deleted", "deletedAt"]);
+      const extraPairs = Object.entries(card).filter(([k]) => !knownFields.has(k));
+
       const inner = "<div class=\"row\" style=\"justify-content: space-between; align-items: flex-start;\">" +
         "<div>" +
-        "<div><b>" + esc(card.agentId || "unknown") + "</b> <span class=\"pill\">" + esc(live) + "</span>" + (card.version ? " <span class=\"muted small\">v" + esc(card.version) + "</span>" : "") + "</div>" +
+        "<div><b>" + esc(agentDisplayName(pub, card)) + "</b> <span class=\"pill\">" + esc(live) + "</span>" + (card.version ? " <span class=\"muted small\">v" + esc(card.version) + "</span>" : "") + "</div>" +
         "<div class=\"small muted\" style=\"margin-top:3px;\">pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code></div>" +
         "</div>" +
         "<button type=\"button\" class=\"followInlineBtn\" data-pub=\"" + esc(pub) + "\"" + (followedPubs.has(pub) ? " style=\"background:#f0fdf4;border-color:#86efac;\"" : "") + ">" + (followedPubs.has(pub) ? "Following ✓" : "Follow") + "</button>" +
         "</div>" +
+        (card.description ? "<div class=\"small muted\" style=\"margin-top:4px;\">" + esc(card.description) + "</div>" : "") +
         (endpoints.http ? "<div class=\"small\" style=\"margin-top:4px;\">http: <code>" + esc(endpoints.http) + "</code></div>" : "") +
         (endpoints.mcp ? "<div class=\"small\" style=\"margin-top:2px;\">mcp: <code>" + esc(endpoints.mcp) + "</code></div>" : "") +
         "<div class=\"small\" style=\"margin-top:6px;\">caps: " +
         (caps.map(c => "<code>" + esc(c.id) + "</code>").join(" ") || "<span class='muted'>none</span>") +
-        "</div>";
+        "</div>" +
+        (extraPairs.length ? "<div class=\"small muted\" style=\"margin-top:4px;\">" +
+          extraPairs.map(([k, v]) => esc(k) + ": <code>" + esc(typeof v === "string" ? v : JSON.stringify(v)) + "</code>").join(" · ") +
+          "</div>" : "");
 
       if (!el) {
         // remove "Discovering agents…" placeholder on first real tile
@@ -689,7 +704,13 @@
       keysOut.style.display = "none";
       keysOut.textContent = "";
 
-      const name = getVal("agentName", "My Agent");
+      const name = getVal("agentName", "");
+      if (!name) {
+        regStatus.textContent = "name is required";
+        document.getElementById("agentName").classList.add("danger");
+        return;
+      }
+      document.getElementById("agentName").classList.remove("danger");
       const description = getVal("agentDesc", "");
       const url = getVal("agentUrl", "");
       const version = getVal("version", "1.0.0");
