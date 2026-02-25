@@ -46,6 +46,12 @@
     details.card > summary::before { content: "▶"; font-size: 10px; color: #a1a1aa; transition: transform 0.15s; }
     details.card[open] > summary::before { transform: rotate(90deg); }
     details.card > summary h2 { margin: 0; }
+    details.path-card > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    details.path-card > summary::-webkit-details-marker { display: none; }
+    details.path-card > summary::before { content: "▶"; font-size: 10px; color: #a1a1aa; transition: transform 0.15s; flex-shrink: 0; }
+    details.path-card[open] > summary::before { transform: rotate(90deg); }
+    textarea[readonly] { background: #f8f8f8; cursor: default; color: #3f3f46; }
+    .kv-row { display: flex; gap: 6px; align-items: center; }
   </style>
 </head>
 
@@ -70,6 +76,10 @@
         <input id="httpEp" type="text" placeholder="http endpoint (optional)" />
         <input id="mcpEp" type="text" placeholder="mcp endpoint (optional)" />
         <input id="caps" type="text" placeholder="capabilities (comma-separated ids)" />
+        <div id="customFieldsContainer" style="display:flex; flex-direction:column; gap:8px;"></div>
+        <div>
+          <button id="addFieldBtn" type="button">＋ Add custom field</button>
+        </div>
         <div>
           <button id="registerBtn" class="btn-primary">Register Agent →</button>
         </div>
@@ -79,9 +89,11 @@
     </div>
 
     <!-- Path 2: Discover -->
-    <div class="path-card">
-      <div class="path-icon">🔍</div>
-      <div class="path-title">Discover &amp; Communicate</div>
+    <details class="path-card" open>
+      <summary>
+        <span class="path-icon">🔍</span>
+        <span class="path-title">Discover &amp; Communicate</span>
+      </summary>
       <div class="path-desc">
         Browse live agents on the network. Select one to inspect its card, then open a chat to communicate directly.
       </div>
@@ -95,7 +107,7 @@
         <div id="agents"><div class="agents-empty">Discovering agents…</div></div>
       </div>
       <a href="chat.html" class="chat-cta">💬 Chat with Agents →</a>
-    </div>
+    </details>
 
   </div>
 
@@ -112,7 +124,7 @@
   <!-- ── Progressive disclosure: agent detail (hidden until selection) ── -->
   <div class="card" id="detailsCard" style="display:none;">
     <div class="row" style="justify-content: space-between;">
-      <h2 style="margin:0;">Maintain Agent Card</h2>
+      <h2 style="margin:0;" id="detailsCardTitle">Agent Card</h2>
       <div class="row">
         <button id="copyPubBtn" type="button">Copy pub</button>
         <button id="closeDetailsBtn" type="button">Close</button>
@@ -121,14 +133,14 @@
 
     <div class="muted small" id="detailsMeta" style="margin-top:8px;"></div>
 
-    <div class="row" style="margin-top:10px;">
+    <div class="row" style="margin-top:10px;" id="cardEditControls">
       <button id="loadFreshBtn" type="button">Reload</button>
       <button id="saveCardBtn" type="button">Save</button>
       <button id="nullifyBtn" type="button" class="dangerBtn">Nullify</button>
       <span class="muted small" id="saveStatus"></span>
     </div>
 
-    <div class="muted small" style="margin-top:10px;">
+    <div class="muted small" style="margin-top:10px;" id="cardEditNote">
       Edit JSON then Save. Save + Nullify require the matching key for the selected pub.
       Nullify writes a signed tombstone so consumers can treat it as deleted.
     </div>
@@ -297,6 +309,7 @@
         authDetails.open = false;
         updateAuthSection();
         applyKeyLayout();
+        if (selectedPub) selectAgent(selectedPub);
       } catch {
         loadedPair = null;
         setKeyPill();
@@ -311,6 +324,7 @@
       authDetails.open = true;
       updateAuthSection();
       applyKeyLayout();
+      if (selectedPub) selectAgent(selectedPub);
     });
 
     // ===== selection state =====
@@ -322,7 +336,17 @@
       const rec = latestByPub.get(pub);
       if (!rec?.card) return;
 
+      const isOwner = !!(loadedPair?.pub && loadedPair.pub === pub);
+      const editControls = document.getElementById("cardEditControls");
+      const editNote = document.getElementById("cardEditNote");
+      const titleEl = document.getElementById("detailsCardTitle");
+
       detailsCard.style.display = "block";
+      titleEl.textContent = isOwner ? "Maintain Agent Card" : "Agent Card";
+      editControls.style.display = isOwner ? "" : "none";
+      editNote.style.display = isOwner ? "" : "none";
+      cardEditor.readOnly = !isOwner;
+
       detailsMeta.innerHTML =
         "pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code> · status: <span class=\"pill\">" + esc(liveness(rec.hb)) + "</span> · updatedAt: " + (rec.card.updatedAt ? new Date(rec.card.updatedAt).toLocaleString() : "?");
 
@@ -641,12 +665,21 @@
 
       const capabilities = capCsv.split(",").map(s => s.trim()).filter(Boolean).map(id => ({ id }));
 
+      const customFields = {};
+      document.querySelectorAll("#customFieldsContainer .kv-row").forEach(row => {
+        const inputs = row.querySelectorAll("input[type='text']");
+        const key = (inputs[0]?.value || "").trim();
+        const value = (inputs[1]?.value || "").trim();
+        if (key) customFields[key] = value;
+      });
+
       const card = {
         agentId,
         version,
         updatedAt: Date.now(),
         endpoints: Object.assign({}, http ? { http } : {}, mcp ? { mcp } : {}),
-        capabilities
+        capabilities,
+        ...customFields
       };
 
       const pair = await Gun.SEA.pair();
@@ -684,6 +717,23 @@
 
       regStatus.textContent = "registered. keypair copied to clipboard (if permitted).";
     }
+
+    document.getElementById("addFieldBtn").addEventListener("click", () => {
+      const container = document.getElementById("customFieldsContainer");
+      const row = document.createElement("div");
+      row.className = "kv-row";
+      row.innerHTML =
+        "<input type=\"text\" placeholder=\"key\" style=\"flex:1; min-width:80px; border:1px solid #e4e4e7; border-radius:12px; padding:10px 12px; font-size:13px; box-sizing:border-box;\" />" +
+        "<input type=\"text\" placeholder=\"value\" style=\"flex:2; border:1px solid #e4e4e7; border-radius:12px; padding:10px 12px; font-size:13px; box-sizing:border-box;\" />" +
+        "<button type=\"button\" class=\"removeFieldBtn\" style=\"flex-shrink:0;\">✕</button>";
+      container.appendChild(row);
+    });
+
+    document.getElementById("customFieldsContainer").addEventListener("click", (e) => {
+      if (e.target.classList.contains("removeFieldBtn")) {
+        e.target.closest(".kv-row").remove();
+      }
+    });
 
     document.getElementById("registerBtn").addEventListener("click", register);
 
