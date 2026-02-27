@@ -1,0 +1,41 @@
+name: Deploy to QStorage
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install AWS CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y awscli
+
+      - name: Configure AWS credentials (for S3-compatible endpoint)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.QSTORAGE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.QSTORAGE_SECRET_ACCESS_KEY }}
+        run: |
+          aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+          aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+          aws configure set default.region "us-east-1"
+          aws configure set default.s3.addressing_style path
+
+      - name: Sync repo to QStorage bucket
+        env:
+          QSTORAGE_ENDPOINT: ${{ secrets.QSTORAGE_ENDPOINT }}
+        run: |
+          ENDPOINT="${QSTORAGE_ENDPOINT:-https://qstorage.quilibrium.com}"
+
+          aws s3 sync . "s3://publicproof" \
+            --endpoint-url "$ENDPOINT" \
+            --delete \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude "node_modules/*"
