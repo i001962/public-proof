@@ -1,0 +1,16 @@
+{
+  "name": "openclaw-gun-bridge",
+  "version": "1.0.0",
+  "description": "Bridge between GunDB chat and OpenClaw webhook for instant agent replies",
+  "main": "bridge.js",
+  "scripts": {
+    "start": "node bridge.js"
+  },
+  "dependencies": {
+    "gun": "^0.2020.1240"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

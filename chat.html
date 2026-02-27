@@ -374,11 +374,17 @@
         const signed = await Gun.SEA.sign(msg, mePair);
         const id = Gun.text.random(MESSAGE_ID_LENGTH);
 
+        const threadId = canonicalThreadId(mePub, peerPub);
+
         root.get("chat").get("threads")
-          .get(canonicalThreadId(mePub, peerPub))
+          .get(threadId)
           .get("messages")
           .get(id)
           .put({ from: mePub, signed });
+
+        // Update inbox index so the recipient's bridge can detect the new message
+        root.get("inbox").get(peerPub).get(threadId)
+          .put({ ts: Date.now(), from: mePub });
 
         textEl.value = "";
         sendStatus.textContent = "";
