@@ -82,9 +82,9 @@
     <div class="inbox">
       <!-- left: thread list -->
       <div class="inbox-list">
-        <div class="inbox-list-header">Follows</div>
+        <div class="inbox-list-header">Inbox</div>
         <div class="inbox-threads" id="inboxThreads">
-          <div class="inbox-empty" id="inboxEmpty">No followed agents yet.</div>
+          <div class="inbox-empty" id="inboxEmpty">No messages yet.</div>
         </div>
       </div>
 
@@ -187,6 +187,7 @@
           mePair = pair;
           mePub  = pair.pub;
           setKeyPill();
+          startInboxIndexListener();
         }
       } catch {}
     }
@@ -203,6 +204,7 @@
         mePair = pair;
         mePub  = pair.pub;
         setKeyPill();
+        startInboxIndexListener();
         document.getElementById("keyPasteArea").value = "";
         // remove self from inbox list if already rendered
         const meEl = inboxThreads.querySelector(`[data-pub="${CSS.escape(mePub)}"]`);
@@ -223,6 +225,72 @@
       setKeyPill();
       document.getElementById("authCard").style.display = "";
     });
+
+    // track which pub's inbox index we have already subscribed to
+    let inboxListenerPub = null;
+
+    // ── inbox index listener ──────────────────────────────────────
+    function ensureCard(pub) {
+      if (nameByPub.has(pub)) return;
+      gun.get("~" + pub).get("openclaw").get("card").once(async (signed) => {
+        if (!signed) return;
+        const card = await Gun.SEA.verify(signed, pub);
+        if (!card || card.deleted) return;
+        nameByPub.set(pub, card.name || card.agentId || "");
+        setKeyPill();
+        // refresh any row already rendered for this pub
+        const el = inboxThreads.querySelector(`[data-pub="${CSS.escape(pub)}"]`);
+        if (el) {
+          const nameEl = el.querySelector(".inbox-thread-name");
+          if (nameEl) nameEl.textContent = displayName(pub);
+        }
+      });
+    }
+
+    function renderInboxRowFromIndex(pub, threadId, entry) {
+      if (!inboxEmptyRemoved) { inboxEmpty.remove(); inboxEmptyRemoved = true; }
+
+      let el = inboxThreads.querySelector(`[data-pub="${CSS.escape(pub)}"]`);
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "inbox-thread";
+        el.dataset.pub = pub;
+        inboxThreads.appendChild(el);
+        el.addEventListener("click", () => openThread(pub));
+      }
+
+      const preview = (entry && entry.preview) || previewByThread.get(threadId) || "";
+      const isRequest = !followedPubs.has(pub);
+
+      el.innerHTML =
+        `<div class="inbox-thread-name">${esc(displayName(pub))}${isRequest ? ' <span class="pill">request</span>' : ''}</div>` +
+        `<div class="inbox-thread-key">${esc(shortPub(pub))}</div>` +
+        (preview ? `<div class="inbox-thread-preview">${esc(preview)}</div>` : "");
+
+      if (peerPub === pub) el.classList.add("selected");
+    }
+
+    function startInboxIndexListener() {
+      if (!mePub || inboxListenerPub === mePub) return;
+      inboxListenerPub = mePub;
+
+      root.get("inbox").get(mePub).map().on((entry, threadId) => {
+        if (!entry || !threadId) return;
+
+        // threadId is canonical: "pubA__pubB"
+        const parts = String(threadId).split("__");
+        if (parts.length !== 2) return;
+
+        const otherPub = parts[0] === mePub ? parts[1] : parts[0];
+        if (!otherPub || otherPub === mePub) return;
+
+        // ensure we can display a name eventually
+        ensureCard(otherPub);
+
+        // render a thread row even if not followed
+        renderInboxRowFromIndex(otherPub, threadId, entry);
+      });
+    }
 
     // ── inbox thread list ─────────────────────────────────────────
     function renderInboxThread(pub, card) {
@@ -384,7 +452,7 @@
 
         // Update inbox index so the recipient's bridge can detect the new message
         root.get("inbox").get(peerPub).get(threadId)
-          .put({ ts: Date.now(), from: mePub });
+          .put({ ts: msg.when, from: mePub, preview: text.slice(0, 120) });
 
         textEl.value = "";
         sendStatus.textContent = "";
