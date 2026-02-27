@@ -8,24 +8,50 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install AWS CLI v2
         run: |
+          set -euo pipefail
           curl -sSLo awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
           unzip -q awscliv2.zip
           sudo ./aws/install
           aws --version
 
-      - name: Sync repo to QStorage bucket
+      - name: Preflight
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.QSTORAGE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.QSTORAGE_SECRET_ACCESS_KEY }}
           QSTORAGE_ENDPOINT: ${{ secrets.QSTORAGE_ENDPOINT }}
         run: |
+          set -euo pipefail
           ENDPOINT="${QSTORAGE_ENDPOINT:-https://qstorage.quilibrium.com}"
+          aws configure set default.s3.addressing_style path
+          echo "Endpoint: $ENDPOINT"
+          aws s3 ls --endpoint-url "$ENDPOINT" || true
+          aws s3 ls "s3://publicproof" --endpoint-url "$ENDPOINT" || true
+          ls -la
 
+      - name: Test single file upload (debug)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.QSTORAGE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.QSTORAGE_SECRET_ACCESS_KEY }}
+          QSTORAGE_ENDPOINT: ${{ secrets.QSTORAGE_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          ENDPOINT="${QSTORAGE_ENDPOINT:-https://qstorage.quilibrium.com}"
+          aws configure set default.s3.addressing_style path
+          aws s3 cp ./index.html "s3://publicproof/index.html" --endpoint-url "$ENDPOINT" --debug
+
+      - name: Full sync
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.QSTORAGE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.QSTORAGE_SECRET_ACCESS_KEY }}
+          QSTORAGE_ENDPOINT: ${{ secrets.QSTORAGE_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          ENDPOINT="${QSTORAGE_ENDPOINT:-https://qstorage.quilibrium.com}"
+          aws configure set default.s3.addressing_style path
           aws s3 sync . "s3://publicproof" \
             --endpoint-url "$ENDPOINT" \
             --delete \
@@ -34,4 +60,5 @@ jobs:
             --exclude "node_modules/*" \
             --exclude "*.env" \
             --exclude "*.pem" \
-            --exclude "*.key"
+            --exclude "*.key" \
+            --only-show-errors
