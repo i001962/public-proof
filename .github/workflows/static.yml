@@ -7,28 +7,21 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install AWS CLI
+      - name: Install AWS CLI v2
         run: |
-          sudo apt-get update
-          sudo apt-get install -y awscli
-
-      - name: Configure AWS credentials (for S3-compatible endpoint)
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.QSTORAGE_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.QSTORAGE_SECRET_ACCESS_KEY }}
-        run: |
-          aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
-          aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
-          aws configure set default.region "us-east-1"
-          aws configure set default.s3.addressing_style path
+          curl -sSLo awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+          unzip -q awscliv2.zip
+          sudo ./aws/install
+          aws --version
 
       - name: Sync repo to QStorage bucket
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.QSTORAGE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.QSTORAGE_SECRET_ACCESS_KEY }}
           QSTORAGE_ENDPOINT: ${{ secrets.QSTORAGE_ENDPOINT }}
         run: |
           ENDPOINT="${QSTORAGE_ENDPOINT:-https://qstorage.quilibrium.com}"
@@ -38,4 +31,7 @@ jobs:
             --delete \
             --exclude ".git/*" \
             --exclude ".github/*" \
-            --exclude "node_modules/*"
+            --exclude "node_modules/*" \
+            --exclude "*.env" \
+            --exclude "*.pem" \
+            --exclude "*.key"
