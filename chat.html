@@ -60,6 +60,17 @@
     .small { font-size: 12px; }
 
     .right-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    /* Mobile: show one panel at a time */
+    .back-btn { display: none; }
+    @media (max-width: 640px) {
+      .inbox { height: calc(100vh - 140px); height: calc(100dvh - 140px); min-height: 400px; }
+      .inbox-list { width: 100%; min-width: 0; border-right: none; }
+      .thread-panel { display: none; width: 100%; }
+      .inbox.thread-open .inbox-list { display: none; }
+      .inbox.thread-open .thread-panel { display: flex; }
+      .back-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 12px; border-radius: 8px; margin-right: 8px; }
+    }
   </style>
 </head>
 
@@ -109,8 +120,13 @@
         <div class="thread-placeholder" id="threadPlaceholder">Select a thread.</div>
 
         <div id="threadHeader" style="display:none;" class="thread-header">
-          <div class="thread-header-name" id="threadHeaderName"></div>
-          <div class="thread-header-key" id="threadHeaderKey"></div>
+          <div style="display:flex; align-items:center;">
+            <button id="backBtn" class="back-btn" type="button">← Back</button>
+            <div>
+              <div class="thread-header-name" id="threadHeaderName"></div>
+              <div class="thread-header-key" id="threadHeaderKey"></div>
+            </div>
+          </div>
           <div class="right-actions" id="threadActions" style="display:none;">
             <button id="followBtn" type="button">Follow</button>
             <button id="unfollowBtn" type="button">Unfollow</button>
@@ -173,6 +189,15 @@
     const toPubInput = document.getElementById("toPubInput");
     const startChatBtn = document.getElementById("startChatBtn");
     const newMsgStatus = document.getElementById("newMsgStatus");
+    const inboxEl = document.querySelector(".inbox");
+    const backBtn = document.getElementById("backBtn");
+
+    backBtn.addEventListener("click", () => {
+      peerPub = null;
+      clearMessages();
+      hideThreadUi();
+      document.querySelectorAll(".inbox-thread").forEach(x => x.classList.remove("selected"));
+    });
 
     const followedPubs = new Set(JSON.parse(localStorage.getItem(FOLLOWS_KEY) || "[]"));
 
@@ -333,6 +358,7 @@
       messagesEl.style.display = "none";
       composeBar.style.display = "none";
       threadActions.style.display = "none";
+      inboxEl.classList.remove("thread-open");
     }
 
     function clearMessages() {
@@ -434,6 +460,8 @@
       threadHeader.style.display = "block";
       messagesEl.style.display = "block";
       composeBar.style.display = "flex";
+
+      inboxEl.classList.add("thread-open");
 
       refreshThreadActions();
 
