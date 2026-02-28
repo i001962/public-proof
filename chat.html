@@ -55,6 +55,7 @@
     .nav { margin-bottom: 8px; }
     .nav a { color: #3b82f6; text-decoration: none; font-size: 14px; }
     .nav a:hover { text-decoration: underline; }
+    .status-link { color: #3b82f6; text-decoration: none; }
     textarea { width: 100%; min-height: 220px; border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; box-sizing: border-box; }
     .small { font-size: 12px; }
 
@@ -653,7 +654,12 @@
     function startNewChat() {
       const targetPub = toSelect.value || toPubInput.value.trim();
       if (!targetPub) {
-        newMsgStatus.textContent = "Choose a recipient";
+        newMsgStatus.textContent = "Choose a recipient — ";
+        const followLink = document.createElement("a");
+        followLink.href = "index.html#discover";
+        followLink.className = "status-link";
+        followLink.textContent = "follow agents →";
+        newMsgStatus.appendChild(followLink);
         return;
       }
       if (targetPub === mePub) {

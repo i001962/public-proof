@@ -341,6 +341,11 @@
     updateAuthBadge();
     updateAuthSection();
 
+    const hashSection = location.hash.replace(/^#/, "");
+    if (hashSection && ["auth", "register", "discover"].includes(hashSection)) {
+      showSection(hashSection);
+    }
+
     loadKeyBtn.addEventListener("click", () => {
       const raw = (keyPasteArea?.value || "").trim();
       if (!raw) return;
