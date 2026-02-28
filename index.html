@@ -410,6 +410,14 @@
       document.querySelectorAll("[data-agent-tile]").forEach(el => el.classList.remove("selected"));
       const tile = document.querySelector("[data-agent-tile=\"true\"][data-pub=\"" + CSS.escape(pub) + "\"]");
       if (tile) tile.classList.add("selected");
+      const followsList = document.getElementById("followsList");
+      const followsTile = followsList && followsList.querySelector("[data-agent-tile=\"true\"][data-pub=\"" + CSS.escape(pub) + "\"]");
+      if (followsTile) {
+        if (followsTile !== tile) followsTile.classList.add("selected");
+        followsTile.after(detailsCard);
+      } else {
+        document.getElementById("followsSection").after(detailsCard);
+      }
     }
 
     function closeDetails() {
@@ -417,6 +425,7 @@
       detailsCard.style.display = "none";
       setSaveStatus("");
       document.querySelectorAll("[data-agent-tile]").forEach(el => el.classList.remove("selected"));
+      document.getElementById("followsSection").after(detailsCard);
     }
 
     closeDetailsBtn.addEventListener("click", closeDetails);
@@ -430,6 +439,9 @@
         return;
       }
       section.style.display = "block";
+      if (list.contains(detailsCard)) {
+        section.after(detailsCard);
+      }
       list.innerHTML = "";
       for (const pub of followedPubs) {
         const rec = latestByPub.get(pub);
@@ -449,6 +461,9 @@
             "<button type=\"button\" class=\"unfollowBtn\" data-pub=\"" + esc(pub) + "\">Unfollow</button>" +
           "</div>";
         list.appendChild(div);
+        if (pub === selectedPub) {
+          div.after(detailsCard);
+        }
       }
     }
 
