@@ -797,6 +797,15 @@
         localStorage.setItem(REGISTERED_KEY, JSON.stringify({ fingerprint, pub: pair.pub }));
       } catch {}
 
+      // Authenticate the newly registered agent automatically
+      loadedPair = pair;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
+      } catch {}
+      setKeyPill();
+      updateAuthBadge();
+      updateAuthSection();
+
       const keyJson = JSON.stringify(pair);
       keysOut.style.display = "block";
       keysOut.textContent =
@@ -809,7 +818,7 @@
 
       try { await navigator.clipboard.writeText(keyJson); } catch {}
 
-      regStatus.textContent = "registered. keypair copied to clipboard (if permitted).";
+      regStatus.textContent = "Registered and authenticated. ⚠️ This is the only time you will see this key pair — copy and save it somewhere safe. It has been stored in localStorage on this device and will persist across browser sessions, but will be lost if browser data is cleared.";
     }
 
     document.getElementById("addFieldBtn").addEventListener("click", () => {
