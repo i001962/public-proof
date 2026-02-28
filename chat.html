@@ -14,7 +14,10 @@
 
     .inbox { display: flex; border: 1px solid #e4e4e7; border-radius: 14px; overflow: hidden; height: 540px; margin: 12px 0; }
     .inbox-list { width: 260px; min-width: 180px; border-right: 1px solid #e4e4e7; display: flex; flex-direction: column; background: #fafafa; }
-    .inbox-list-header { padding: 10px 14px; border-bottom: 1px solid #e4e4e7; font-weight: 600; font-size: 13px; color: #18181b; flex-shrink: 0; }
+    .inbox-list-header { padding: 10px 14px; border-bottom: 1px solid #e4e4e7; font-weight: 600; font-size: 13px; color: #18181b; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; }
+    .inbox-list-header button { padding: 3px 10px; font-size: 12px; border-radius: 8px; }
+    #newMsgPanel label { font-size: 12px; color: #52525b; font-weight: 600; }
+    #newMsgPanel select, #newMsgPanel input[type="text"] { width: 100%; box-sizing: border-box; border: 1px solid #e4e4e7; border-radius: 8px; padding: 6px 8px; font-size: 12px; margin-top: 4px; }
     .inbox-threads { flex: 1; overflow-y: auto; }
     .inbox-thread { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; cursor: pointer; background: white; }
     .inbox-thread:hover { background: #f4f4f5; }
@@ -84,7 +87,18 @@
 
     <div class="inbox">
       <div class="inbox-list">
-        <div class="inbox-list-header">Inbox</div>
+        <div class="inbox-list-header"><span>Inbox</span><button id="newMsgBtn" type="button">New</button></div>
+        <div id="newMsgPanel" style="display:none; padding:10px 14px; border-bottom:1px solid #e4e4e7; background:white;">
+          <label for="toSelect">To:</label>
+          <select id="toSelect" style="margin-bottom:6px;">
+            <option value="">Select a followed agent…</option>
+          </select>
+          <input id="toPubInput" type="text" placeholder="Paste pubkey…" style="margin-bottom:6px;" />
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="startChatBtn" type="button" class="btn-primary">Start</button>
+            <span class="muted" id="newMsgStatus"></span>
+          </div>
+        </div>
         <div class="inbox-threads" id="inboxThreads">
           <div class="inbox-empty" id="inboxEmpty">No messages yet.</div>
         </div>
@@ -152,6 +166,13 @@
     const markReadBtn = document.getElementById("markReadBtn");
     const threadActionStatus = document.getElementById("threadActionStatus");
 
+    const newMsgBtn = document.getElementById("newMsgBtn");
+    const newMsgPanel = document.getElementById("newMsgPanel");
+    const toSelect = document.getElementById("toSelect");
+    const toPubInput = document.getElementById("toPubInput");
+    const startChatBtn = document.getElementById("startChatBtn");
+    const newMsgStatus = document.getElementById("newMsgStatus");
+
     const followedPubs = new Set(JSON.parse(localStorage.getItem(FOLLOWS_KEY) || "[]"));
 
     let mePair = null;
@@ -211,6 +232,7 @@
       localStorage.setItem(FOLLOWS_KEY, JSON.stringify(Array.from(followedPubs)));
       refreshAllRowsFollowBadges();
       refreshThreadActions();
+      if (newMsgPanel.style.display !== "none") refreshToSelect();
     }
 
     function refreshThreadActions() {
@@ -603,6 +625,64 @@
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         send();
+      }
+    });
+
+    function refreshToSelect() {
+      toSelect.innerHTML = "<option value=\"\">Select a followed agent\u2026</option>";
+      for (const pub of followedPubs) {
+        if (pub === mePub) continue;
+        ensureCard(pub);
+        const opt = document.createElement("option");
+        opt.value = pub;
+        opt.textContent = displayName(pub) + " \u00b7 " + shortPub(pub);
+        toSelect.appendChild(opt);
+      }
+    }
+
+    function toggleNewMsgPanel(show) {
+      newMsgPanel.style.display = show ? "" : "none";
+      if (show) {
+        refreshToSelect();
+        toPubInput.value = "";
+        newMsgStatus.textContent = "";
+        toSelect.focus();
+      }
+    }
+
+    function startNewChat() {
+      const targetPub = toSelect.value || toPubInput.value.trim();
+      if (!targetPub) {
+        newMsgStatus.textContent = "Choose a recipient";
+        return;
+      }
+      if (targetPub === mePub) {
+        newMsgStatus.textContent = "Cannot chat with yourself";
+        return;
+      }
+      newMsgStatus.textContent = "";
+      ensureCard(targetPub);
+      if (!rowStateByPeer.has(targetPub)) {
+        rowStateByPeer.set(targetPub, { ts: Date.now(), preview: "", unread: 0 });
+        renderRow(targetPub);
+        sortRowsByLastTs();
+      }
+      openThread(targetPub);
+      toggleNewMsgPanel(false);
+      document.getElementById("text").focus();
+    }
+
+    newMsgBtn.addEventListener("click", () => {
+      const visible = newMsgPanel.style.display !== "none";
+      toggleNewMsgPanel(!visible);
+    });
+
+    startChatBtn.addEventListener("click", startNewChat);
+
+    toPubInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        startNewChat();
       }
     });
 
