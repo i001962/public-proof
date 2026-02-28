@@ -23,7 +23,8 @@
     .inbox-thread:hover { background: #f4f4f5; }
     .inbox-thread.selected { background: #eff6ff; border-left: 3px solid #3b82f6; padding-left: 11px; }
     .inbox-thread-name { font-weight: 600; font-size: 13px; color: #18181b; display: flex; align-items: center; gap: 8px; }
-    .inbox-thread-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; margin-top: 2px; }
+    .inbox-thread-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; margin-top: 2px; display: none; }
+    .inbox-thread:hover .inbox-thread-key { display: block; }
     .inbox-thread-preview { font-size: 11px; color: #71717a; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .inbox-thread-meta { margin-top: 6px; display: flex; gap: 8px; align-items: center; }
     .inbox-empty { padding: 24px 14px; font-size: 12px; color: #a1a1aa; text-align: center; }
@@ -31,14 +32,16 @@
     .thread-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     .thread-header { padding: 10px 14px; border-bottom: 1px solid #e4e4e7; background: white; flex-shrink: 0; }
     .thread-header-name { font-weight: 600; font-size: 14px; color: #18181b; }
-    .thread-header-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; margin-top: 2px; }
+    .thread-header-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; margin-top: 2px; display: none; }
+    .thread-header:hover .thread-header-key { display: block; }
     .thread-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: #a1a1aa; font-size: 13px; }
     .messages { flex: 1; overflow-y: auto; background: #fafafa; padding: 12px; display: flex; flex-direction: column; }
     .msg { border: 1px solid #e4e4e7; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; background: white; max-width: 75%; align-self: flex-start; }
     .msg-me { border-color: #bfdbfe; background: #eff6ff; align-self: flex-end; margin-left: 25%; }
     .msg-header { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
     .msg-name { font-weight: 600; font-size: 13px; }
-    .msg-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; }
+    .msg-key { font-family: ui-monospace, monospace; font-size: 10px; color: #a1a1aa; display: none; }
+    .msg:hover .msg-key { display: inline; }
     .msg-time { font-size: 10px; color: #a1a1aa; margin-left: auto; }
     .msg-body { margin-top: 4px; font-size: 13px; }
 
@@ -248,10 +251,12 @@
     function setKeyPill() {
       if (!mePair?.pub) {
         keyPill.textContent = "no key loaded";
+        keyPill.title = "";
         return;
       }
       const name = nameByPub.get(mePub);
-      keyPill.textContent = "me: " + (name ? name + " · " : "") + shortPub(mePub);
+      keyPill.textContent = "me: " + (name || shortPub(mePub));
+      keyPill.title = mePub;
     }
 
     function persistFollows() {
@@ -664,7 +669,8 @@
         ensureCard(pub);
         const opt = document.createElement("option");
         opt.value = pub;
-        opt.textContent = displayName(pub) + " \u00b7 " + shortPub(pub);
+        opt.textContent = displayName(pub);
+        opt.title = pub;
         toSelect.appendChild(opt);
       }
     }
