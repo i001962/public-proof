@@ -42,6 +42,9 @@
     .msg-time { font-size: 10px; color: #a1a1aa; margin-left: auto; }
     .msg-body { margin-top: 4px; font-size: 13px; }
 
+    .msg-actions { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .msg-actions button { padding: 4px 8px; font-size: 12px; border-radius: 10px; }
+
     .compose { padding: 10px 14px; border-top: 1px solid #e4e4e7; background: white; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
     .compose input[type="text"] { flex: 1; border: 1px solid #e4e4e7; border-radius: 12px; padding: 8px 12px; font-size: 13px; box-sizing: border-box; }
 
@@ -61,7 +64,6 @@
 
     .right-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-    /* Mobile: show one panel at a time */
     .back-btn { display: none; }
     @media (max-width: 640px) {
       .inbox { height: calc(100vh - 140px); height: calc(100dvh - 140px); min-height: 400px; }
@@ -159,8 +161,13 @@
     const FOLLOWS_KEY = "openclaw_follows_v1";
 
     const MESSAGE_ID_LENGTH = 9;
+    const VALUE_ID_LENGTH = 12;
+    const DAILY_CREDIT_CAP = 100;
+    const PAIR_DAILY_CAP = 20;
     const SHORT_PUB_PREFIX = 8;
     const SHORT_PUB_SUFFIX = 4;
+
+    const DEBUG_KEYS = false;
 
     const gun = GUN({ peers: PEERS, localStorage: true, radisk: false });
     const root = gun.get("openclaw");
@@ -192,13 +199,7 @@
     const inboxEl = document.querySelector(".inbox");
     const backBtn = document.getElementById("backBtn");
 
-    backBtn.addEventListener("click", () => {
-      peerPub = null;
-      clearMessages();
-      hideThreadUi();
-      document.querySelectorAll(".inbox-thread").forEach(x => x.classList.remove("selected"));
-    });
-
+    const nameByPub = new Map();
     const followedPubs = new Set(JSON.parse(localStorage.getItem(FOLLOWS_KEY) || "[]"));
 
     let mePair = null;
@@ -208,14 +209,27 @@
     let rendered = new Set();
     let renderedContent = new Set();
     let msgBuffer = [];
-
-    const nameByPub = new Map();
-
     const rowStateByPeer = new Map();
     let inboxListenerStarted = false;
 
+    const trustHop1 = new Set();
+    const trustHop2 = new Set();
+    const trustRadius = new Set();
+    const hop2ListeningTo = new Set();
+
+    const dailySpendByMe = new Map();
+    const pairSpendByMe = new Map();
+    const seenMyReceipts = new Set();
+
+    // Friendly ID layer caches: pub -> profile
+    const userCache = new Map();
+
     function esc(s) {
       return String(s).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+    }
+
+    function safeStr(v) {
+      return typeof v === "string" ? v : "";
     }
 
     function shortPub(pub) {
@@ -223,10 +237,12 @@
       return pub.slice(0, SHORT_PUB_PREFIX) + "…" + pub.slice(-SHORT_PUB_SUFFIX);
     }
 
+    // Backward compatible display name (card cache)
     function displayName(pub) {
       return nameByPub.get(pub) || shortPub(pub);
     }
 
+    // Canonical thread is still pub based for now
     function canonicalThreadId(a, b) {
       return [a, b].sort().join("__");
     }
@@ -245,13 +261,260 @@
       return null;
     }
 
-    function setKeyPill() {
+    function dayKey(ms) {
+      const d = new Date(ms);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}${m}${day}`;
+    }
+
+    function valueReceiptId() {
+      return Gun.text.random(VALUE_ID_LENGTH);
+    }
+
+    // -----------------------------
+    // Friendly identity resolution
+    // -----------------------------
+    async function resolveUserByPub(pub) {
+      pub = safeStr(pub);
+      if (!pub) return null;
+      if (userCache.has(pub)) return userCache.get(pub);
+
+      // 1) Try new identity graph: openclaw/ids/pubToUser/{pub} => userId
+      const userId = await new Promise(res =>
+        root.get("ids").get("pubToUser").get(pub).once(v => res(safeStr(v) || ""))
+      );
+
+      if (userId) {
+        const user = await new Promise(res =>
+          root.get("ids").get("users").get(userId).once(v => res(v || null))
+        );
+
+        const profile = {
+          userId,
+          handle: safeStr(user?.handle),
+          displayName: safeStr(user?.displayName),
+          pub: safeStr(user?.pub) || pub
+        };
+
+        userCache.set(pub, profile);
+        return profile;
+      }
+
+      // 2) Fallback to existing card based name map (no stable id)
+      const fallback = {
+        userId: "",
+        handle: "",
+        displayName: displayName(pub),
+        pub
+      };
+      userCache.set(pub, fallback);
+      return fallback;
+    }
+
+    function formatUserLabel(profile, pub) {
+      const dn = safeStr(profile?.displayName);
+      const handle = safeStr(profile?.handle);
+      const userId = safeStr(profile?.userId);
+
+      if (dn && handle) return `${dn} (${handle})`;
+      if (dn) return dn;
+      if (handle) return `@${handle}`;
+      if (userId) return userId;
+      return `unknown (${shortPub(pub)})`;
+    }
+
+    function formatUserMeta(profile, pub) {
+      const userId = safeStr(profile?.userId);
+      if (DEBUG_KEYS) return `${userId ? "id: " + userId : "key: " + shortPub(pub)} · ${shortPub(pub)}`;
+      return userId ? `id: ${userId}` : `key: ${shortPub(pub)}`;
+    }
+
+    // Optional helper: create a friendly user record for me if it doesn't exist yet.
+    // Not wired to UI; call manually once after authenticating if you want.
+    async function ensureMyUserRecord({ userId, handle, displayName }) {
+      if (!mePub) return;
+      if (!userId) return;
+
+      root.get("ids").get("users").get(userId).put({
+        id: userId,
+        handle: handle || "",
+        displayName: displayName || "",
+        pub: mePub,
+        createdAt: Date.now()
+      });
+
+      root.get("ids").get("handles").get(handle || "").put(userId);
+      root.get("ids").get("pubToUser").get(mePub).put(userId);
+
+      // refresh caches
+      userCache.delete(mePub);
+      await resolveUserByPub(mePub);
+      setKeyPill();
+    }
+
+    // -----------------------------
+    // Social edges + receipts logic
+    // -----------------------------
+    async function verifyFollowRow(row) {
+      if (!row?.follower || !row?.signed) return null;
+      const edge = await Gun.SEA.verify(row.signed, row.follower);
+      if (!edge || edge.type !== "follow_edge" || edge.v !== 1) return null;
+      if (edge.follower !== row.follower) return null;
+      if (!edge.target) return null;
+      return edge;
+    }
+
+    async function publishFollowEdge(targetPub, action) {
+      if (!mePair?.pub || !mePub) return;
+      if (!targetPub || targetPub === mePub) return;
+
+      const edge = {
+        type: "follow_edge",
+        v: 1,
+        follower: mePub,
+        target: targetPub,
+        action,
+        when: Date.now()
+      };
+
+      const signed = await Gun.SEA.sign(edge, mePair);
+      root.get("social").get("follows").get(mePub).get(targetPub).put({ follower: mePub, signed });
+    }
+
+    async function verifyReceiptRow(row) {
+      if (!row?.requester || !row?.signed) return null;
+      const rec = await Gun.SEA.verify(row.signed, row.requester);
+      if (!rec || rec.type !== "value_receipt" || rec.v !== 1) return null;
+      if (rec.requester !== row.requester) return null;
+      if (!rec.provider || !rec.credits || !rec.when) return null;
+      if (rec.provider === rec.requester) return null;
+      return rec;
+    }
+
+    function recomputeTrustRadius() {
+      trustRadius.clear();
+      for (const p of trustHop1) trustRadius.add(p);
+      for (const p of trustHop2) trustRadius.add(p);
+    }
+
+    function startHop2Listeners() {
+      for (const hop1Pub of trustHop1) {
+        if (hop2ListeningTo.has(hop1Pub)) continue;
+        hop2ListeningTo.add(hop1Pub);
+
+        root.get("social").get("follows").get(hop1Pub).map().on(async (row) => {
+          const edge = await verifyFollowRow(row);
+          if (!edge) return;
+
+          if (edge.action === "follow") trustHop2.add(edge.target);
+          else trustHop2.delete(edge.target);
+
+          recomputeTrustRadius();
+        });
+      }
+    }
+
+    function startTrustGraphListeners() {
+      if (!mePub) return;
+
+      trustHop1.clear();
+      for (const p of followedPubs) trustHop1.add(p);
+      recomputeTrustRadius();
+      startHop2Listeners();
+
+      root.get("social").get("follows").get(mePub).map().on(async (row) => {
+        const edge = await verifyFollowRow(row);
+        if (!edge) return;
+
+        if (edge.action === "follow") trustHop1.add(edge.target);
+        else trustHop1.delete(edge.target);
+
+        recomputeTrustRadius();
+        startHop2Listeners();
+      });
+    }
+
+    function startMyReceiptSpendListener() {
+      if (!mePub) return;
+
+      root.get("value").get("byRequester").get(mePub).map().on((_, rid) => {
+        if (!rid) return;
+        if (seenMyReceipts.has(rid)) return;
+        seenMyReceipts.add(rid);
+
+        root.get("value").get("receipts").get(rid).once(async (row) => {
+          const rec = await verifyReceiptRow(row);
+          if (!rec) return;
+
+          const dk = dayKey(rec.when);
+          const prev = dailySpendByMe.get(dk) || 0;
+          dailySpendByMe.set(dk, prev + Number(rec.credits || 0));
+
+          const pk = `${dk}:${rec.provider}`;
+          const prevPair = pairSpendByMe.get(pk) || 0;
+          pairSpendByMe.set(pk, prevPair + Number(rec.credits || 0));
+        });
+      });
+    }
+
+    async function giveCredit({ providerPub, credits, note, threadId, messageId }) {
+      if (!mePair?.pub || !mePub) return { ok: false, reason: "authenticate to give credit" };
+      if (!providerPub) return { ok: false, reason: "no provider" };
+      if (providerPub === mePub) return { ok: false, reason: "cannot credit yourself" };
+
+      const dk = dayKey(Date.now());
+      const spent = dailySpendByMe.get(dk) || 0;
+      const add = Number(credits || 0) || 0;
+
+      if (spent + add > DAILY_CREDIT_CAP) {
+        return { ok: false, reason: `daily cap ${DAILY_CREDIT_CAP} reached (${spent}/${DAILY_CREDIT_CAP})` };
+      }
+      const pk = `${dk}:${providerPub}`;
+      const spentPair = pairSpendByMe.get(pk) || 0;
+      if (spentPair + add > PAIR_DAILY_CAP) {
+        return { ok: false, reason: `pair cap ${PAIR_DAILY_CAP}/day reached (${spentPair}/${PAIR_DAILY_CAP})` };
+      }
+
+      const rec = {
+        type: "value_receipt",
+        v: 1,
+        receiptId: valueReceiptId(),
+        provider: providerPub,
+        requester: mePub,
+        credits: add,
+        note: note || "",
+        when: Date.now(),
+        threadId,
+        messageId
+      };
+
+      const signed = await Gun.SEA.sign(rec, mePair);
+
+      root.get("value").get("receipts").get(rec.receiptId).put({ requester: mePub, signed });
+      root.get("value").get("byProvider").get(providerPub).get(rec.receiptId).put(1);
+      root.get("value").get("byRequester").get(mePub).get(rec.receiptId).put(1);
+
+      dailySpendByMe.set(dk, spent + add);
+      const pk2 = `${dk}:${providerPub}`;
+      pairSpendByMe.set(pk2, spentPair + add);
+
+      return { ok: true };
+    }
+
+    // -----------------------------
+    // UI helpers
+    // -----------------------------
+    async function setKeyPill() {
       if (!mePair?.pub) {
         keyPill.textContent = "no key loaded";
         return;
       }
-      const name = nameByPub.get(mePub);
-      keyPill.textContent = "me: " + (name ? name + " · " : "") + shortPub(mePub);
+
+      const meProfile = await resolveUserByPub(mePub);
+      const label = meProfile ? formatUserLabel(meProfile, mePub) : "";
+      keyPill.textContent = "me: " + (label ? label + " · " : "") + shortPub(mePub);
     }
 
     function persistFollows() {
@@ -259,6 +522,13 @@
       refreshAllRowsFollowBadges();
       refreshThreadActions();
       if (newMsgPanel.style.display !== "none") refreshToSelect();
+
+      if (mePub) {
+        trustHop1.clear();
+        for (const p of followedPubs) trustHop1.add(p);
+        recomputeTrustRadius();
+        startHop2Listeners();
+      }
     }
 
     function refreshThreadActions() {
@@ -273,20 +543,22 @@
       markReadBtn.style.display = mePub ? "" : "none";
     }
 
-    followBtn.addEventListener("click", () => {
+    followBtn.addEventListener("click", async () => {
       if (!peerPub) return;
       followedPubs.add(peerPub);
+      persistFollows();
+      await publishFollowEdge(peerPub, "follow");
       threadActionStatus.textContent = "followed";
       setTimeout(() => threadActionStatus.textContent = "", 900);
-      persistFollows();
     });
 
-    unfollowBtn.addEventListener("click", () => {
+    unfollowBtn.addEventListener("click", async () => {
       if (!peerPub) return;
       followedPubs.delete(peerPub);
+      persistFollows();
+      await publishFollowEdge(peerPub, "unfollow");
       threadActionStatus.textContent = "unfollowed";
       setTimeout(() => threadActionStatus.textContent = "", 900);
-      persistFollows();
     });
 
     markReadBtn.addEventListener("click", () => {
@@ -313,6 +585,8 @@
           mePub = pair.pub;
           setKeyPill();
           startInboxIndexListener();
+          startTrustGraphListeners();
+          startMyReceiptSpendListener();
         }
       } catch {}
     }
@@ -333,6 +607,8 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
         document.getElementById("authCard").style.display = "none";
         startInboxIndexListener();
+        startTrustGraphListeners();
+        startMyReceiptSpendListener();
       } catch {
         mePair = null;
         mePub = null;
@@ -350,6 +626,15 @@
       clearMessages();
       hideThreadUi();
       inboxListenerStarted = false;
+
+      trustHop1.clear();
+      trustHop2.clear();
+      trustRadius.clear();
+      hop2ListeningTo.clear();
+
+      dailySpendByMe.clear();
+      pairSpendByMe.clear();
+      seenMyReceipts.clear();
     });
 
     function hideThreadUi() {
@@ -379,6 +664,10 @@
 
         const nm = card.name || card.agentId || "";
         if (nm) nameByPub.set(pub, nm);
+
+        // refresh cached identity label if we only had fallback
+        userCache.delete(pub);
+
         setKeyPill();
 
         const el = inboxThreads.querySelector("[data-pub=\"" + CSS.escape(pub) + "\"]");
@@ -392,7 +681,7 @@
       });
     }
 
-    function buildRowNameHtml(pub, st) {
+    async function buildRowNameHtml(pub, st) {
       const isRequest = !followedPubs.has(pub);
       const unread = typeof st.unread === "number" ? st.unread : 0;
 
@@ -400,10 +689,11 @@
       if (isRequest) badges += " <span class=\"pill\">request</span>";
       if (unread > 0) badges += " <span class=\"pill\">" + esc(String(unread)) + "</span>";
 
-      return esc(displayName(pub)) + badges;
+      const profile = await resolveUserByPub(pub);
+      return esc(formatUserLabel(profile, pub)) + badges;
     }
 
-    function renderRow(pub) {
+    async function renderRow(pub) {
       if (!pub) return;
       if (!inboxEmpty) return;
 
@@ -421,9 +711,13 @@
       const st = rowStateByPeer.get(pub) || {};
       const preview = st.preview || "";
 
+      const profile = await resolveUserByPub(pub);
+      const rowNameHtml = await buildRowNameHtml(pub, st);
+      const meta = formatUserMeta(profile, pub);
+
       el.innerHTML =
-        "<div class=\"inbox-thread-name\">" + buildRowNameHtml(pub, st) + "</div>" +
-        "<div class=\"inbox-thread-key\">" + esc(shortPub(pub)) + "</div>" +
+        "<div class=\"inbox-thread-name\">" + rowNameHtml + "</div>" +
+        "<div class=\"inbox-thread-key\">" + esc(meta) + "</div>" +
         (preview ? "<div class=\"inbox-thread-preview\">" + esc(preview) + "</div>" : "");
 
       if (peerPub === pub) el.classList.add("selected");
@@ -446,15 +740,16 @@
       for (const el of items) inboxThreads.appendChild(el);
     }
 
-    function openThread(pub) {
+    async function openThread(pub) {
       peerPub = pub;
 
       document.querySelectorAll(".inbox-thread").forEach(x => x.classList.remove("selected"));
       const el = inboxThreads.querySelector("[data-pub=\"" + CSS.escape(pub) + "\"]");
       if (el) el.classList.add("selected");
 
-      threadHeaderName.textContent = displayName(pub);
-      threadHeaderKey.textContent = shortPub(pub);
+      const profile = await resolveUserByPub(pub);
+      threadHeaderName.textContent = formatUserLabel(profile, pub);
+      threadHeaderKey.textContent = formatUserMeta(profile, pub);
 
       threadPlaceholder.style.display = "none";
       threadHeader.style.display = "block";
@@ -480,23 +775,61 @@
       }
     }
 
-    function addMsg(msg, isMine) {
+    async function addMsg(msg, isMine) {
       msgBuffer.push({ msg, isMine });
       msgBuffer.sort((a, b) => a.msg.when - b.msg.when);
 
       messagesEl.innerHTML = "";
+      const tid = (mePub && peerPub) ? canonicalThreadId(mePub, peerPub) : "";
+
       for (const item of msgBuffer) {
         const el = document.createElement("div");
         el.className = "msg" + (item.isMine ? " msg-me" : "");
-        const name = item.isMine ? "You" : displayName(item.msg.from);
+
+        let name = "You";
+        let meta = "";
+
+        if (!item.isMine) {
+          const profile = await resolveUserByPub(item.msg.from);
+          name = formatUserLabel(profile, item.msg.from);
+          meta = formatUserMeta(profile, item.msg.from);
+        } else {
+          const meProfile = await resolveUserByPub(mePub);
+          meta = meProfile ? formatUserMeta(meProfile, mePub) : "";
+        }
+
+        const actionsHtml = (!item.isMine && mePair?.pub)
+          ? "<div class=\"msg-actions\">" +
+              "<button type=\"button\" data-credit=\"1\">+1 value</button>" +
+              "<button type=\"button\" data-credit=\"5\">+5 value</button>" +
+            "</div>"
+          : "";
 
         el.innerHTML =
           "<div class=\"msg-header\">" +
             "<span class=\"msg-name\">" + esc(name) + "</span>" +
-            "<span class=\"msg-key\">" + esc(shortPub(item.msg.from)) + "</span>" +
+            "<span class=\"msg-key\">" + esc(meta) + "</span>" +
             "<span class=\"msg-time\">" + new Date(item.msg.when).toLocaleTimeString() + "</span>" +
           "</div>" +
-          "<div class=\"msg-body\">" + esc(item.msg.text) + "</div>";
+          "<div class=\"msg-body\">" + esc(item.msg.text) + "</div>" +
+          actionsHtml;
+
+        if (!item.isMine && mePair?.pub && tid) {
+          el.querySelectorAll("button[data-credit]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+              const credits = Number(btn.getAttribute("data-credit") || "1");
+              const res = await giveCredit({
+                providerPub: item.msg.from,
+                credits,
+                note: "",
+                threadId: tid,
+                messageId: item.msg._id || ""
+              });
+              sendStatus.textContent = res.ok ? "credited" : (res.reason || "credit failed");
+              setTimeout(() => sendStatus.textContent = "", 900);
+            });
+          });
+        }
 
         messagesEl.appendChild(el);
       }
@@ -505,7 +838,7 @@
 
       if (mePub && peerPub) {
         const latestMsg = msgBuffer[msgBuffer.length - 1].msg;
-        const tid = canonicalThreadId(mePub, peerPub);
+        const tid2 = canonicalThreadId(mePub, peerPub);
 
         const st = rowStateByPeer.get(peerPub) || {};
         st.preview = latestMsg.text;
@@ -514,7 +847,7 @@
         renderRow(peerPub);
         sortRowsByLastTs();
 
-        root.get("inbox").get(mePub).get(tid).put({ preview: latestMsg.text.slice(0, 120), ts: latestMsg.when });
+        root.get("inbox").get(mePub).get(tid2).put({ preview: latestMsg.text.slice(0, 120), ts: latestMsg.when });
       }
     }
 
@@ -536,6 +869,8 @@
           let verified = null;
           try { verified = await Gun.SEA.verify(signed, from); } catch {}
           if (!verified) return;
+
+          verified._id = id;
 
           rendered.add(id);
 
@@ -562,7 +897,6 @@
 
         const st = rowStateByPeer.get(other) || {};
         const ts = Number(entry.ts || entry.when || entry.lastTs || 0) || 0;
-
         st.ts = Math.max(st.ts || 0, ts);
 
         if (typeof entry.preview === "string" && entry.preview.trim()) {
@@ -586,6 +920,7 @@
       });
     }
 
+    // Agent card watcher (kept)
     root.get("agentIndex").map().on((ts, pub) => {
       if (!pub) return;
       gun.get("~" + pub).get("openclaw").get("card").on(async (signed) => {
@@ -595,6 +930,10 @@
 
         const nm = card.name || card.agentId || "";
         if (nm) nameByPub.set(pub, nm);
+
+        // refresh cached identity label if we only had fallback
+        userCache.delete(pub);
+
         setKeyPill();
 
         if (!mePub) return;
@@ -664,7 +1003,7 @@
         ensureCard(pub);
         const opt = document.createElement("option");
         opt.value = pub;
-        opt.textContent = displayName(pub) + " \u00b7 " + shortPub(pub);
+        opt.textContent = displayName(pub) + " · " + shortPub(pub);
         toSelect.appendChild(opt);
       }
     }
@@ -682,7 +1021,7 @@
     function startNewChat() {
       const targetPub = toSelect.value || toPubInput.value.trim();
       if (!targetPub) {
-        newMsgStatus.textContent = "Choose a recipient — ";
+        newMsgStatus.textContent = "Choose a recipient ";
         const followLink = document.createElement("a");
         followLink.href = "index.html#discover";
         followLink.className = "status-link";
@@ -718,6 +1057,13 @@
         e.preventDefault();
         startNewChat();
       }
+    });
+
+    backBtn.addEventListener("click", () => {
+      peerPub = null;
+      clearMessages();
+      hideThreadUi();
+      document.querySelectorAll(".inbox-thread").forEach(x => x.classList.remove("selected"));
     });
 
     setKeyPill();

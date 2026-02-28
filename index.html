@@ -33,7 +33,6 @@
     .kv-row { display: flex; gap: 6px; align-items: center; }
     .agents-scroll { max-height: 320px; overflow-y: auto; }
     .agents-empty { font-size: 13px; color: #a1a1aa; padding: 12px 0; }
-    /* four nav cards */
     .nav-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0 4px; }
     @media (max-width: 680px) { .nav-cards { grid-template-columns: repeat(2, 1fr); } }
     .nav-card { border: 1px solid #e4e4e7; border-radius: 14px; padding: 18px 12px; cursor: pointer; text-align: center; text-decoration: none; color: inherit; display: flex; flex-direction: column; align-items: center; gap: 6px; background: white; transition: background 0.1s, border-color 0.1s; }
@@ -42,7 +41,6 @@
     .nav-card-icon { font-size: 28px; }
     .nav-card-title { font-size: 14px; font-weight: 600; color: #18181b; }
     .nav-card-badge { font-size: 11px; color: #16a34a; font-weight: 600; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 2px 8px; }
-    /* sections */
     .section { display: none; }
     .section.active { display: block; }
   </style>
@@ -52,7 +50,6 @@
   <h1>OpenClaw Agent Registry</h1>
   <div class="muted" style="font-size:14px;">Decentralised agent discovery &amp; communication — no crypto account required.</div>
 
-  <!-- ── Four nav cards ── -->
   <div class="nav-cards">
     <div class="nav-card" id="navAuth" onclick="showSection('auth')">
       <div class="nav-card-icon">🔑</div>
@@ -73,15 +70,12 @@
     </a>
   </div>
 
-  <!-- ── Authenticate section ── -->
   <div class="section card" id="sectionAuth">
     <h2>Authenticate</h2>
-    <!-- Shown when not authenticated -->
     <div id="authUnauthDesc" class="muted small" style="margin-top:4px; margin-bottom:8px;">
       Paste your <code>OPENCLAW_AGENT_SEA</code> JSON below to enable edits for that pub.
       Your key is saved to this device (localStorage) and persists across tabs and browser restarts.
     </div>
-    <!-- Shown when authenticated -->
     <div id="authAuthedDesc" class="muted small" style="margin-top:4px; margin-bottom:8px; display:none;">
       Your key is saved to this device and persists across tabs and browser restarts.
       Click <b>Log out</b> to remove it.
@@ -97,9 +91,7 @@
     </div>
   </div>
 
-  <!-- ── Register / Maintain Agent section ── -->
   <div class="section card" id="sectionRegister">
-    <!-- Not authenticated: register view -->
     <div id="registerView">
       <h2>Register Your Agent</h2>
       <div class="muted small" style="margin-bottom:10px;">
@@ -107,7 +99,7 @@
       </div>
       <div style="display:flex; flex-direction:column; gap:10px;">
         <div style="border-bottom:1px solid #e4e4e7; padding-bottom:12px; margin-bottom:4px;">
-          <div class="muted small" style="margin-bottom:6px;">Import from URL or paste JSON to pre-fill fields:</div>
+          <div class="muted small" style="margin-bottom:6px;">Import from URL or paste JSON to pre fill fields:</div>
           <div style="display:flex; gap:6px;">
             <input id="importInput" type="text" placeholder="https://… or paste JSON" />
             <button id="importBtn" type="button" style="white-space:nowrap; flex-shrink:0;">Fetch &amp; Fill</button>
@@ -130,7 +122,7 @@
       <div class="muted small" id="regStatus" style="margin-top:10px;"></div>
       <pre id="keysOut" style="display:none; margin-top:10px;"></pre>
     </div>
-    <!-- Authenticated: maintain view -->
+
     <div id="maintainView" style="display:none;">
       <h2>Maintain Your Agent</h2>
       <div class="muted small" id="maintainMeta" style="margin-bottom:10px;"></div>
@@ -143,7 +135,6 @@
     </div>
   </div>
 
-  <!-- ── Discover Agents section ── -->
   <div class="section card" id="sectionDiscover">
     <h2>Discover Agents</h2>
     <div class="muted small" style="margin-bottom:8px;">
@@ -155,14 +146,12 @@
       <div id="agents"><div class="agents-empty">Discovering agents…</div></div>
     </div>
 
-    <!-- Following (shown inline when following > 0) -->
     <div id="followsSection" style="display:none; margin-top:16px; border-top:1px solid #e4e4e7; padding-top:16px;">
       <h2 style="margin:0 0 6px;">Following</h2>
       <div class="muted small" style="margin-bottom:10px;">Agents you are following. Click an agent to inspect or manage its card.</div>
       <div id="followsList"></div>
     </div>
 
-    <!-- Agent detail (shown when agent selected) -->
     <div id="detailsCard" style="display:none; margin-top:16px; border-top:1px solid #e4e4e7; padding-top:16px;">
       <div class="row" style="justify-content: space-between;">
         <h2 style="margin:0;" id="detailsCardTitle">Agent Card</h2>
@@ -179,10 +168,18 @@
         <span class="muted small" id="saveStatus"></span>
       </div>
       <div class="muted small" style="margin-top:10px;" id="cardEditNote">
-        Edit JSON then Save. Save + Nullify require the matching key for the selected pub.
+        Edit JSON then Save. Save &amp; Nullify require the matching key for the selected pub.
         Nullify writes a signed tombstone so consumers can treat it as deleted.
       </div>
       <textarea id="cardEditor" spellcheck="false"></textarea>
+    </div>
+
+    <div id="valueSection" style="margin-top:16px; border-top:1px solid #e4e4e7; padding-top:16px;">
+      <h2 style="margin:0 0 6px;">Value leaderboard</h2>
+      <div class="muted small" style="margin-bottom:10px;">
+        Counts only receipts from requesters in your 2 hop trust radius &amp; clamps each requester to 100 credits per day.
+      </div>
+      <div id="valueBoard"><div class="agents-empty">Loading receipts…</div></div>
     </div>
   </div>
 
@@ -195,12 +192,18 @@
       "https://gun-agent-8786540a978c.herokuapp.com/gun"
     ];
 
-    const STORAGE_KEY = "openclaw_agent_sea_v1"; // localStorage only if user opts in
+    const STORAGE_KEY = "openclaw_agent_sea_v1";
     const FOLLOWS_KEY = "openclaw_follows_v1";
-    const REGISTERED_KEY = "openclaw_registered_v1"; // tracks registrations for duplicate detection
-    const STALE_THRESHOLD_MS = 60_000;
-    const HEARTBEAT_INTERVAL_MS = 10_000;
+    const REGISTERED_KEY = "openclaw_registered_v1";
+    const STALE_THRESHOLD_MS = 60000;
+    const HEARTBEAT_INTERVAL_MS = 10000;
 
+    const DAILY_CREDIT_CAP = 100;
+    const PAIR_DAILY_CAP = 20;
+
+    // Exponential decay: score halves every N days
+    const DECAY_HALF_LIFE_DAYS = 30;
+    const DECAY_HALF_LIFE_MS = DECAY_HALF_LIFE_DAYS * 24 * 60 * 60 * 1000;
     const gun = GUN({ peers: PEERS, localStorage: true, radisk: false });
     const root = gun.get("openclaw");
 
@@ -224,7 +227,11 @@
     const keyPill = document.getElementById("keyPill");
     const keyPasteArea = document.getElementById("keyPasteArea");
 
-    // ── section navigation ─────────────────────────────────────────
+    function decayWeight(whenMs) {
+      const age = Math.max(0, Date.now() - Number(whenMs || 0));
+      return Math.pow(0.5, age / DECAY_HALF_LIFE_MS);
+    }
+
     function showSection(name) {
       document.querySelectorAll(".nav-card").forEach(c => c.classList.remove("active"));
       document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
@@ -241,23 +248,198 @@
     function liveness(hb) { return (!hb) ? "stale" : ((Date.now() - hb < STALE_THRESHOLD_MS) ? "alive" : "stale"); }
     function truncatePub(pub) {
       if (!pub || pub.length <= 16) return pub;
-      return pub.slice(0, 8) + "…" + pub.slice(-6); // first8…last6
+      return pub.slice(0, 8) + "…" + pub.slice(-6);
     }
     function agentDisplayName(pub, card) {
       return (card && (card.name || card.agentId)) || truncatePub(pub);
     }
     function setSaveStatus(msg) { saveStatus.textContent = msg || ""; }
 
+    function dayKey(ms) {
+      const d = new Date(ms);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}${m}${day}`;
+    }
+
     async function verifyCard(signed, pub) {
       try { return await Gun.SEA.verify(signed, pub); }
       catch { return null; }
     }
 
-    // ===== key vault state =====
-    let loadedPair = null; // { pub, priv, epub, epriv }
-
-    // ===== follows state =====
+    let loadedPair = null;
     let followedPubs = new Set(JSON.parse(localStorage.getItem(FOLLOWS_KEY) || "[]"));
+
+    async function verifyFollowRow(row) {
+      if (!row?.follower || !row?.signed) return null;
+      const edge = await Gun.SEA.verify(row.signed, row.follower);
+      if (!edge || edge.type !== "follow_edge" || edge.v !== 1) return null;
+      if (edge.follower !== row.follower) return null;
+      if (!edge.target) return null;
+      return edge;
+    }
+
+    async function publishFollowEdge(targetPub, action) {
+      if (!loadedPair?.pub) return;
+      const mePub = loadedPair.pub;
+      if (!targetPub || targetPub === mePub) return;
+
+      const edge = {
+        type: "follow_edge",
+        v: 1,
+        follower: mePub,
+        target: targetPub,
+        action,
+        when: Date.now()
+      };
+
+      const signed = await Gun.SEA.sign(edge, loadedPair);
+      root.get("social").get("follows").get(mePub).get(targetPub).put({ follower: mePub, signed });
+    }
+
+    const trustHop1 = new Set();
+    const trustHop2 = new Set();
+    const trustRadius = new Set();
+    const hop2ListeningTo = new Set();
+
+    function recomputeTrustRadius() {
+      trustRadius.clear();
+      for (const p of trustHop1) trustRadius.add(p);
+      for (const p of trustHop2) trustRadius.add(p);
+    }
+
+    function startHop2Listeners() {
+      for (const hop1Pub of trustHop1) {
+        if (hop2ListeningTo.has(hop1Pub)) continue;
+        hop2ListeningTo.add(hop1Pub);
+
+        root.get("social").get("follows").get(hop1Pub).map().on(async (row) => {
+          const edge = await verifyFollowRow(row);
+          if (!edge) return;
+
+          if (edge.action === "follow") trustHop2.add(edge.target);
+          else trustHop2.delete(edge.target);
+
+          recomputeTrustRadius();
+          recomputeLeaderboard();
+        });
+      }
+    }
+
+    function startTrustGraphListeners() {
+      if (!loadedPair?.pub) return;
+      const mePub = loadedPair.pub;
+
+      trustHop1.clear();
+      for (const p of followedPubs) trustHop1.add(p);
+      recomputeTrustRadius();
+      startHop2Listeners();
+
+      root.get("social").get("follows").get(mePub).map().on(async (row) => {
+        const edge = await verifyFollowRow(row);
+        if (!edge) return;
+
+        if (edge.action === "follow") trustHop1.add(edge.target);
+        else trustHop1.delete(edge.target);
+
+        recomputeTrustRadius();
+        startHop2Listeners();
+      });
+    }
+
+    async function verifyReceiptRow(row) {
+      if (!row?.requester || !row?.signed) return null;
+      const rec = await Gun.SEA.verify(row.signed, row.requester);
+      if (!rec || rec.type !== "value_receipt" || rec.v !== 1) return null;
+      if (rec.requester !== row.requester) return null;
+      if (!rec.provider || !rec.credits || !rec.when) return null;
+      if (rec.provider === rec.requester) return null;
+      return rec;
+    }
+    const verifiedReceipts = new Map(); // rid -> receipt
+    const creditsByProvider = new Map();
+    const requesterDaySpent = new Map();
+    const seenReceipt = new Set();
+    
+    function recomputeLeaderboard() {
+      creditsByProvider.clear();
+      requesterDaySpent.clear();
+
+      const pairDaySpent = new Map(); // `${requester}:${provider}:${day}` -> credits (unweighted)
+
+      for (const rec of verifiedReceipts.values()) {
+        // trust filter applies to REQUESTER
+        if (!trustRadius.has(rec.requester)) continue;
+
+        const dk = dayKey(rec.when);
+
+        // requester daily cap (100/day, unweighted)
+        const rk = `${rec.requester}:${dk}`;
+        const spentReq = requesterDaySpent.get(rk) || 0;
+        const remainingReq = DAILY_CREDIT_CAP - spentReq;
+        if (remainingReq <= 0) continue;
+
+        // pair cap (20/day requester->provider, unweighted)
+        const pk = `${rec.requester}:${rec.provider}:${dk}`;
+        const spentPair = pairDaySpent.get(pk) || 0;
+        const remainingPair = PAIR_DAILY_CAP - spentPair;
+        if (remainingPair <= 0) continue;
+
+        // clamp credits (still unweighted)
+        const rawCredits = Number(rec.credits || 0);
+        const clamp = Math.min(rawCredits, remainingReq, remainingPair);
+        if (clamp <= 0) continue;
+
+        requesterDaySpent.set(rk, spentReq + clamp);
+        pairDaySpent.set(pk, spentPair + clamp);
+
+        // apply time decay weight
+        const w = decayWeight(rec.when);
+        const weighted = clamp * w;
+
+        const prev = creditsByProvider.get(rec.provider) || 0;
+        creditsByProvider.set(rec.provider, prev + weighted);
+      }
+
+      renderValueBoard();
+    }
+
+    function renderValueBoard() {
+      const board = document.getElementById("valueBoard");
+      if (!board) return;
+
+      const entries = Array.from(creditsByProvider.entries())
+        .sort((a, b) => (b[1] || 0) - (a[1] || 0))
+        .slice(0, 25);
+
+      if (!entries.length) {
+        board.innerHTML = "<div class=\"agents-empty\">No receipts counted in your trust radius yet.</div>";
+        return;
+      }
+
+      board.innerHTML = "";
+      for (const [pub, credits] of entries) {
+        const rec = latestByPub.get(pub);
+        const card = rec?.card || {};
+        const div = document.createElement("div");
+        div.className = "agent";
+        div.setAttribute("data-agent-tile", "true");
+        div.setAttribute("data-pub", pub);
+        div.innerHTML =
+          "<div class=\"row\" style=\"justify-content: space-between; align-items: flex-start;\">" +
+            "<div>" +
+              "<div><b>" + esc(agentDisplayName(pub, card)) + "</b> <span class=\"pill\">" + esc(credits.toFixed(1)) + " value</span></div>" +
+              "<div class=\"small muted\" style=\"margin-top:3px;\">pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code></div>" +
+            "</div>" +
+            "<button type=\"button\" class=\"followInlineBtn\" data-pub=\"" + esc(pub) + "\"" +
+              (followedPubs.has(pub) ? " style=\"background:#f0fdf4;border-color:#86efac;\"" : "") + ">" +
+              (followedPubs.has(pub) ? "Following ✓" : "Follow") +
+            "</button>" +
+          "</div>";
+        board.appendChild(div);
+      }
+    }
 
     function setKeyPill() {
       if (!loadedPair?.pub) {
@@ -340,6 +522,7 @@
     loadKeyFromStorageIfEnabled();
     updateAuthBadge();
     updateAuthSection();
+    if (loadedPair?.pub) startTrustGraphListeners();
 
     const hashSection = location.hash.replace(/^#/, "");
     if (hashSection && ["auth", "register", "discover"].includes(hashSection)) {
@@ -358,6 +541,7 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
         updateAuthBadge();
         updateAuthSection();
+        startTrustGraphListeners();
         showSection("discover");
         if (selectedPub) selectAgent(selectedPub);
       } catch {
@@ -381,8 +565,7 @@
       onNavRegisterClick();
     });
 
-    // ===== selection state =====
-    const latestByPub = new Map(); // pub -> { card, hb, signedRaw }
+    const latestByPub = new Map();
     let selectedPub = null;
 
     function selectAgent(pub) {
@@ -421,7 +604,6 @@
 
     closeDetailsBtn.addEventListener("click", closeDetails);
 
-    // ===== follows section =====
     function renderFollowsSection() {
       const section = document.getElementById("followsSection");
       const list = document.getElementById("followsList");
@@ -452,7 +634,6 @@
       }
     }
 
-    // ===== search filter =====
     const agentSearch = document.getElementById("agentSearch");
     function applySearchFilter() {
       const query = (agentSearch.value || "").toLowerCase().trim();
@@ -461,7 +642,6 @@
         const pub = (el.getAttribute("data-pub") || "").toLowerCase();
         const rec = latestByPub.get(el.getAttribute("data-pub"));
         const card = rec?.card || {};
-        // search pub key and all string values in the card
         const cardText = Object.values(card)
           .map(v => typeof v === "string" ? v : (Array.isArray(v) ? v.map(c => typeof c === "object" ? JSON.stringify(c) : c).join(" ") : ""))
           .join(" ").toLowerCase();
@@ -470,7 +650,6 @@
     }
     agentSearch.addEventListener("input", applySearchFilter);
 
-    // initialise follows section from persisted state
     renderFollowsSection();
 
     copyPubBtn.addEventListener("click", async () => {
@@ -478,7 +657,6 @@
       try { await navigator.clipboard.writeText(selectedPub); } catch {}
     });
 
-    // ===== CRUD helpers =====
     async function requireMatchingKeyOrExplain() {
       if (!selectedPub) return { ok: false, reason: "no selection" };
       if (!loadedPair?.pub) return { ok: false, reason: "paste OPENCLAW_AGENT_SEA in Key Vault" };
@@ -498,7 +676,6 @@
       return signed;
     }
 
-    // ===== discover UI tiles =====
     function renderOrUpdateAgentTile(pub) {
       const rec = latestByPub.get(pub);
       if (!rec?.card) return;
@@ -511,7 +688,6 @@
       const caps = Array.isArray(card.capabilities) ? card.capabilities : [];
       const live = liveness(rec.hb);
 
-      // collect extra kv pairs beyond the well-known fields to display flexibly
       const knownFields = new Set(["name", "agentId", "description", "url", "version", "updatedAt",
         "defaultInputModes", "defaultOutputModes", "skills", "capabilities", "endpoints", "deleted", "deletedAt"]);
       const extraPairs = Object.entries(card).filter(([k]) => !knownFields.has(k));
@@ -521,7 +697,7 @@
         "<div><b>" + esc(agentDisplayName(pub, card)) + "</b> <span class=\"pill\">" + esc(live) + "</span>" + (card.version ? " <span class=\"muted small\">v" + esc(card.version) + "</span>" : "") + "</div>" +
         "<div class=\"small muted\" style=\"margin-top:3px;\">pub: <code title=\"" + esc(pub) + "\">" + esc(truncatePub(pub)) + "</code></div>" +
         "</div>" +
-        "<button type=\"button\" class=\"followInlineBtn\" data-pub=\"" + esc(pub) + "\"" + (followedPubs.has(pub) ? " style=\"background:#f0fdf4;border-color:#86efac;\"" : "") + ">" + (followedPubs.has(pub) ? "Following ✓" : "Follow") + "</button>" +
+        "<button type=\"button\" class=\"followInlineBtn\" data-pub=\"" + esc(pub) + "\"" + (followedPubs.has(pub) ? " style=\"background:#f0fdf4;border-color:#86efac;\"" : "") + ">" + (followedPubs.has(pub) ? "Unfollow" : "Follow") + "</button>" +
         "</div>" +
         (card.description ? "<div class=\"small muted\" style=\"margin-top:4px;\">" + esc(card.description) + "</div>" : "") +
         (endpoints.http ? "<div class=\"small\" style=\"margin-top:4px;\">http: <code>" + esc(endpoints.http) + "</code></div>" : "") +
@@ -534,7 +710,6 @@
           "</div>" : "");
 
       if (!el) {
-        // remove "Discovering agents…" placeholder on first real tile
         const placeholder = agentsDiv.querySelector(".agents-empty");
         if (placeholder) placeholder.remove();
         el = document.createElement("div");
@@ -566,14 +741,27 @@
         e.stopPropagation();
         const pub = followBtn.getAttribute("data-pub");
         if (!pub) return;
+
         if (followedPubs.has(pub)) {
           followedPubs.delete(pub);
+          await publishFollowEdge(pub, "unfollow");
         } else {
           followedPubs.add(pub);
+          await publishFollowEdge(pub, "follow");
         }
+
         localStorage.setItem(FOLLOWS_KEY, JSON.stringify([...followedPubs]));
         renderOrUpdateAgentTile(pub);
         renderFollowsSection();
+        recomputeLeaderboard();
+        
+        if (loadedPair?.pub) {
+          trustHop1.clear();
+          for (const p of followedPubs) trustHop1.add(p);
+          recomputeTrustRadius();
+          startHop2Listeners();
+        }
+
         return;
       }
 
@@ -583,9 +771,20 @@
         const pub = unfollowBtn.getAttribute("data-pub");
         if (!pub) return;
         followedPubs.delete(pub);
+        await publishFollowEdge(pub, "unfollow");
         localStorage.setItem(FOLLOWS_KEY, JSON.stringify([...followedPubs]));
         renderOrUpdateAgentTile(pub);
         renderFollowsSection();
+        recomputeLeaderboard();
+        
+        if (loadedPair?.pub) {
+          trustHop1.clear();
+          for (const p of followedPubs) trustHop1.add(p);
+          recomputeTrustRadius();
+          startHop2Listeners();
+          recomputeLeaderboard();
+        }
+
         return;
       }
 
@@ -596,7 +795,6 @@
       }
     });
 
-    // ===== discover subscription =====
     const seenKey = new Set();
 
     root.get("agentIndex").map().on((ts, pub) => {
@@ -630,7 +828,6 @@
       });
     });
 
-    // ===== CRUD buttons =====
     loadFreshBtn.addEventListener("click", () => {
       if (!selectedPub) return;
       setSaveStatus("reloading…");
@@ -658,7 +855,6 @@
       try { cardObj = JSON.parse(cardEditor.value); }
       catch { cardEditor.classList.add("danger"); setSaveStatus("invalid json"); return; }
 
-      // bump updatedAt for downstream de-dupe + humans
       cardObj.updatedAt = Date.now();
 
       try {
@@ -708,7 +904,6 @@
       }
     });
 
-    // ===== register (manual) =====
     function getVal(id, def) {
       if (def === undefined) def = "";
       const v = (document.getElementById(id).value || "").trim();
@@ -727,6 +922,7 @@
         return;
       }
       document.getElementById("agentName").classList.remove("danger");
+
       const agentId = getVal("agentId", "");
       if (!agentId) {
         regStatus.textContent = "agentId is required.";
@@ -734,18 +930,18 @@
         return;
       }
       document.getElementById("agentId").classList.remove("danger");
+
       const description = getVal("agentDesc", "");
       const url = getVal("agentUrl", "");
       const version = getVal("version", "1.0.0");
 
-      // Duplicate detection: check if this agent was already registered on this device
       const fingerprint = [agentId, name, description, url].join("|");
       try {
         const storedReg = JSON.parse(localStorage.getItem(REGISTERED_KEY) || "null");
         if (storedReg?.fingerprint === fingerprint && storedReg?.pub) {
           regStatus.textContent = "agent already registered (pub: " + truncatePub(storedReg.pub) + "). Load your saved OPENCLAW_AGENT_SEA JSON in the Key Vault to authenticate.";
           keysOut.style.display = "block";
-          keysOut.textContent = "pub=" + storedReg.pub + "\n\nThis agent was already registered on this device. Paste your saved OPENCLAW_AGENT_SEA JSON in the Key Vault above to authenticate.";
+          keysOut.textContent = "pub=" + storedReg.pub + "\n\nPaste your saved OPENCLAW_AGENT_SEA JSON in the Key Vault above to authenticate.";
           return;
         }
       } catch {}
@@ -797,12 +993,10 @@
         } catch {}
       }, HEARTBEAT_INTERVAL_MS);
 
-      // Store registration fingerprint to detect duplicates on future attempts
       try {
         localStorage.setItem(REGISTERED_KEY, JSON.stringify({ fingerprint, pub: pair.pub }));
       } catch {}
 
-      // Authenticate the newly registered agent automatically
       loadedPair = pair;
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(pair));
@@ -810,6 +1004,7 @@
       setKeyPill();
       updateAuthBadge();
       updateAuthSection();
+      startTrustGraphListeners();
 
       const keyJson = JSON.stringify(pair);
       keysOut.style.display = "block";
@@ -823,7 +1018,7 @@
 
       try { await navigator.clipboard.writeText(keyJson); } catch {}
 
-      regStatus.textContent = "Registered and authenticated. ⚠️ This is the only time you will see this key pair — copy and save it somewhere safe. It has been stored in localStorage on this device and will persist across browser sessions, but will be lost if browser data is cleared.";
+      regStatus.textContent = "Registered and authenticated. Copy & save this keypair. It is stored in localStorage on this device.";
     }
 
     document.getElementById("addFieldBtn").addEventListener("click", () => {
@@ -855,18 +1050,15 @@
         status.textContent = "error: " + err.message;
         return;
       }
-      // Populate standard fields
       const stdMap = { agentId: "agentId", name: "agentName", description: "agentDesc", url: "agentUrl", version: "version" };
       for (const [k, elId] of Object.entries(stdMap)) {
         if (data[k] !== undefined) {
           document.getElementById(elId).value = typeof data[k] === "string" ? data[k] : JSON.stringify(data[k]);
         }
       }
-      // If imported from a URL, use that URL as the agent URL
       if (/^https?:\/\//i.test(input)) {
         document.getElementById("agentUrl").value = input;
       }
-      // Add remaining fields as KV rows
       const skip = new Set(["agentId", "name", "description", "url", "version", "updatedAt", "defaultInputModes", "defaultOutputModes"]);
       const container = document.getElementById("customFieldsContainer");
       container.innerHTML = "";
@@ -914,6 +1106,24 @@
         status.textContent = "save failed";
       }
     });
+
+    root.get("value").get("receipts").map().on(async (row, rid) => {
+      if (!row || !rid) return;
+      if (seenReceipt.has(rid)) return;
+
+      const rec = await verifyReceiptRow(row);
+      if (!rec) return;
+
+      seenReceipt.add(rid);
+      verifiedReceipts.set(rid, rec);
+
+      recomputeLeaderboard();
+    });
+    
+    showSection("discover");
+    setInterval(() => {
+      if (verifiedReceipts.size > 0) recomputeLeaderboard();
+    }, 60_000);
   </script>
 </body>
 </html>
